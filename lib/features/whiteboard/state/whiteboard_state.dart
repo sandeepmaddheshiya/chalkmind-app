@@ -26,6 +26,7 @@ class WhiteboardState {
   final bool isCalculatingMath;
   final bool isAutoShapeEnabled;
   final bool isAutoMathEnabled;
+  final Map<ToolType, ToolPreset> toolPresets;
 
   const WhiteboardState({
     required this.project,
@@ -48,6 +49,7 @@ class WhiteboardState {
     this.shapeSuggestion,
     this.detectedMathResult,
     this.handwritingMathResult,
+    this.toolPresets = defaultPresets,
   });
 
   Color get selectedColor => Color(selectedColorValue);
@@ -73,6 +75,7 @@ class WhiteboardState {
     ShapeDetectionResult? Function()? shapeSuggestion,
     MathEvaluationResult? Function()? detectedMathResult,
     HandwritingMathResult? Function()? handwritingMathResult,
+    Map<ToolType, ToolPreset>? toolPresets,
   }) {
     return WhiteboardState(
       project: project ?? this.project,
@@ -95,6 +98,7 @@ class WhiteboardState {
       shapeSuggestion: shapeSuggestion != null ? shapeSuggestion() : this.shapeSuggestion,
       detectedMathResult: detectedMathResult != null ? detectedMathResult() : this.detectedMathResult,
       handwritingMathResult: handwritingMathResult != null ? handwritingMathResult() : this.handwritingMathResult,
+      toolPresets: toolPresets ?? this.toolPresets,
     );
   }
 
@@ -106,7 +110,40 @@ class WhiteboardState {
     0xFF047857, // Chalkboard Emerald Green
     0xFF6D28D9, // Deep Violet / Indigo
     0xFFD97706, // Warm Amber Orange
-    0xFFF59E0B, // Highlighter Gold
+    0xFF059669, // Forest Green
     0xFFF9FAFB, // Chalk White (for dark boards)
   ];
+
+  // Vibrant pastel highlighter palette
+  static const List<int> highlighterPalette = [
+    0xFFFACC15, // Fluorescent Sunlight Yellow
+    0xFF4ADE80, // Fresh Mint Green
+    0xFF38BDF8, // Vivid Sky Blue
+    0xFFF472B6, // Neon Bubblegum Pink
+    0xFFFB923C, // Vivid Tangerine Orange
+    0xFFC084FC, // Soft Lavender Purple
+  ];
+
+  static const Map<ToolType, ToolPreset> defaultPresets = {
+    ToolType.pen: ToolPreset(colorValue: 0xFF111827, strokeWidth: 3.5),
+    ToolType.pencil: ToolPreset(colorValue: 0xFF4B5563, strokeWidth: 2.0),
+    ToolType.marker: ToolPreset(colorValue: 0xFF1E3A8A, strokeWidth: 8.0),
+    ToolType.highlighter: ToolPreset(colorValue: 0xFFFACC15, strokeWidth: 22.0),
+  };
+}
+
+class ToolPreset {
+  final int colorValue;
+  final double strokeWidth;
+
+  const ToolPreset({required this.colorValue, required this.strokeWidth});
+
+  Color get color => Color(colorValue);
+
+  ToolPreset copyWith({int? colorValue, double? strokeWidth}) {
+    return ToolPreset(
+      colorValue: colorValue ?? this.colorValue,
+      strokeWidth: strokeWidth ?? this.strokeWidth,
+    );
+  }
 }

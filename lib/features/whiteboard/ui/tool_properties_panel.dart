@@ -32,15 +32,18 @@ class ToolPropertiesPanel extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Section 1: Color Palette
-          const Text(
-            'Color',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          Text(
+            state.currentTool == ToolType.highlighter ? 'Highlighter Color' : 'Pen Color',
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: WhiteboardState.standardPalette.map((colorVal) {
+            children: (state.currentTool == ToolType.highlighter
+                    ? WhiteboardState.highlighterPalette
+                    : WhiteboardState.standardPalette)
+                .map((colorVal) {
               final isSelected = state.selectedColorValue == colorVal;
               return GestureDetector(
                 onTap: () {
@@ -88,13 +91,13 @@ class ToolPropertiesPanel extends ConsumerWidget {
           ),
           const Divider(height: 24),
 
-          // Section 2: Stroke Width / Size Slider
+          // Section 2: Stroke Width / Size Slider & Presets
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Stroke Width',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              Text(
+                state.currentTool == ToolType.highlighter ? 'Highlighter Width' : 'Stroke Width',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
               ),
               Text(
                 '${state.selectedStrokeWidth.toStringAsFixed(1)} pt',
@@ -140,6 +143,27 @@ class ToolPropertiesPanel extends ConsumerWidget {
                 ),
               ),
             ],
+          ),
+
+          // Quick Width Preset Chips
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 6,
+            children: (state.currentTool == ToolType.highlighter
+                    ? <(double, String)>[(14.0, 'Fine 14pt'), (22.0, 'Medium 22pt'), (32.0, 'Broad 32pt')]
+                    : <(double, String)>[(2.0, 'Fine 2pt'), (3.5, 'Medium 3.5pt'), (6.0, 'Bold 6pt'), (12.0, 'Thick 12pt')])
+                .map<Widget>((preset) {
+              final isPresetSelected = (state.selectedStrokeWidth - preset.$1).abs() < 0.5;
+              return ChoiceChip(
+                label: Text(preset.$2, style: const TextStyle(fontSize: 11)),
+                selected: isPresetSelected,
+                onSelected: (selected) {
+                  if (selected) {
+                    ref.read(whiteboardControllerProvider.notifier).setStrokeWidth(preset.$1);
+                  }
+                },
+              );
+            }).toList(),
           ),
 
           // Section 3: Shapes Specific Options

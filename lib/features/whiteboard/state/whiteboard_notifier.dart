@@ -61,18 +61,45 @@ class WhiteboardNotifier extends Notifier<WhiteboardState> {
   }
 
   void setTool(ToolType tool) {
-    state = state.copyWith(
-      currentTool: tool,
-      selectedObjectIds: {},
-    );
+    final preset = state.toolPresets[tool];
+    if (preset != null) {
+      state = state.copyWith(
+        currentTool: tool,
+        selectedColorValue: preset.colorValue,
+        selectedStrokeWidth: preset.strokeWidth,
+        selectedObjectIds: {},
+      );
+    } else {
+      state = state.copyWith(
+        currentTool: tool,
+        selectedObjectIds: {},
+      );
+    }
   }
 
   void setColor(int colorValue) {
-    state = state.copyWith(selectedColorValue: colorValue);
+    final updatedPresets = Map<ToolType, ToolPreset>.from(state.toolPresets);
+    if (updatedPresets.containsKey(state.currentTool)) {
+      updatedPresets[state.currentTool] =
+          updatedPresets[state.currentTool]!.copyWith(colorValue: colorValue);
+    }
+    state = state.copyWith(
+      selectedColorValue: colorValue,
+      toolPresets: updatedPresets,
+    );
   }
 
   void setStrokeWidth(double width) {
-    state = state.copyWith(selectedStrokeWidth: width.clamp(1.0, 48.0));
+    final clamped = width.clamp(1.0, 48.0);
+    final updatedPresets = Map<ToolType, ToolPreset>.from(state.toolPresets);
+    if (updatedPresets.containsKey(state.currentTool)) {
+      updatedPresets[state.currentTool] =
+          updatedPresets[state.currentTool]!.copyWith(strokeWidth: clamped);
+    }
+    state = state.copyWith(
+      selectedStrokeWidth: clamped,
+      toolPresets: updatedPresets,
+    );
   }
 
   void setShapeType(ShapeType shapeType) {

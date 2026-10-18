@@ -100,6 +100,7 @@ class WhiteboardToolbar extends ConsumerWidget {
               icon: item.$2,
               tooltip: item.$3,
               isSelected: state.currentTool == item.$1,
+              presetColor: state.toolPresets[item.$1]?.color,
               onPressed: () {
                 ref
                     .read(whiteboardControllerProvider.notifier)
@@ -144,18 +145,21 @@ class _ToolIconButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
   final bool isSelected;
+  final Color? presetColor;
   final VoidCallback onPressed;
 
   const _ToolIconButton({
     required this.icon,
     required this.tooltip,
     required this.isSelected,
+    this.presetColor,
     required this.onPressed,
   });
 
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Tooltip(
       message: tooltip,
@@ -175,10 +179,39 @@ class _ToolIconButton extends StatelessWidget {
                   ? Border.all(color: primary, width: 1.5)
                   : null,
             ),
-            child: Icon(
-              icon,
-              size: 22,
-              color: isSelected ? primary : Colors.grey.shade600,
+            child: Stack(
+              children: [
+                Center(
+                  child: Icon(
+                    icon,
+                    size: 22,
+                    color: isSelected ? primary : Colors.grey.shade600,
+                  ),
+                ),
+                if (presetColor != null)
+                  Positioned(
+                    right: 4,
+                    bottom: 4,
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: presetColor,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isDark ? const Color(0xFF1F2937) : Colors.white,
+                          width: 1.2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.25),
+                            blurRadius: 2,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         ),
