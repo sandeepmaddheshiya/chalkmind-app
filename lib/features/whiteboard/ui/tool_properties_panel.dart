@@ -255,6 +255,64 @@ class ToolPropertiesPanel extends ConsumerWidget {
               );
             }).toList(),
           ),
+
+          const Divider(height: 24),
+
+          // Section 5: AI & Smart Recognition Toggles
+          const Text(
+            'Smart Assistant & Recognition',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 6),
+
+          // Auto Shape Toggle
+          SwitchListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            secondary: const Icon(Icons.interests_outlined, size: 20),
+            title: const Text('Auto Shape Detection', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+            subtitle: const Text('Convert hand-drawn strokes to geometric shapes', style: TextStyle(fontSize: 10)),
+            value: state.isAutoShapeEnabled,
+            onChanged: (val) {
+              ref.read(whiteboardControllerProvider.notifier).setAutoShape(val);
+            },
+          ),
+
+          // Auto Math Solver Toggle
+          SwitchListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            secondary: const Icon(Icons.auto_awesome_rounded, size: 20, color: Color(0xFF059669)),
+            title: const Text('Auto Math Solver', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+            subtitle: const Text('Automatically solve equations ending in "="', style: TextStyle(fontSize: 10)),
+            value: state.isAutoMathEnabled,
+            onChanged: (val) {
+              ref.read(whiteboardControllerProvider.notifier).setAutoMath(val);
+            },
+          ),
+
+          // Solve Selected Math Button (if objects are selected)
+          if (state.selectedObjectIds.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF059669),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: const Icon(Icons.psychology_outlined, size: 18),
+                label: Text(
+                  'Solve Selected (${state.selectedObjectIds.length})',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+                onPressed: () {
+                  ref.read(whiteboardControllerProvider.notifier).solveSelectedStrokes();
+                },
+              ),
+            ),
+          ],
         ],
       ),
     );

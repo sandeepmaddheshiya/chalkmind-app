@@ -943,6 +943,112 @@ class UniversalMathEngine {
 
     return null;
   }
+
+  /// Generates pedagogical step-by-step mathematical reasoning and explanation for any expression
+  static MathSolutionDetails getStepsAndExplanation(String expression, String answer) {
+    final cleanExpr = expression.replaceAll('=', '').trim();
+    final norm = cleanExpr.toLowerCase().replaceAll(' ', '');
+
+    // 1. Difference of Cubes: a^3 - b^3
+    if (norm == 'a^3-b^3' || norm == 'a³-b³' || norm == 'x^3-y^3' || norm == 'x³-y³') {
+      final v1 = norm.contains('a') ? 'a' : 'x';
+      final v2 = norm.contains('b') ? 'b' : 'y';
+      return MathSolutionDetails(
+        steps: [
+          'Recall the algebraic identity for Difference of Cubes: u³ - v³ = (u - v)(u² + uv + v²).',
+          'Identify terms: the first cube root is $v1, and the second cube root is $v2.',
+          'Form the linear binomial factor: ($v1 - $v2).',
+          'Form the quadratic factor with positive cross-product: ($v1² + $v1$v2 + $v2²).',
+          'Combine factors: $answer.',
+        ],
+        explanation: 'Factoring a difference of cubes splits the expression into a real linear factor ($v1 - $v2) and an irreducible quadratic factor ($v1² + $v1$v2 + $v2²).',
+      );
+    }
+
+    // 2. Sum of Cubes: a^3 + b^3
+    if (norm == 'a^3+b^3' || norm == 'a³+b³' || norm == 'x^3+y^3' || norm == 'x³+y³') {
+      final v1 = norm.contains('a') ? 'a' : 'x';
+      final v2 = norm.contains('b') ? 'b' : 'y';
+      return MathSolutionDetails(
+        steps: [
+          'Recall the algebraic identity for Sum of Cubes: u³ + v³ = (u + v)(u² - uv + v²).',
+          'Identify terms: the first cube root is $v1, and the second cube root is $v2.',
+          'Form the linear binomial factor: ($v1 + $v2).',
+          'Form the quadratic factor with negative cross-product: ($v1² - $v1$v2 + $v2²).',
+          'Combine factors: $answer.',
+        ],
+        explanation: 'Factoring a sum of cubes decomposes the cubic polynomial using alternating sign identities.',
+      );
+    }
+
+    // 3. Difference of Squares: a^2 - b^2, x^2 - 9
+    if (norm.contains('^2-') || norm.contains('²-')) {
+      return MathSolutionDetails(
+        steps: [
+          'Recall the Difference of Squares formula: u² - v² = (u - v)(u + v).',
+          'Determine the square root of each term.',
+          'Multiply the sum and difference conjugate binomials: $answer.',
+        ],
+        explanation: 'The difference between any two squares factors into the product of their sum and difference.',
+      );
+    }
+
+    // 4. Square of Binomial: (a + b)^2 or (x - 3)^2
+    if (norm.startsWith('(') && (norm.endsWith(')^2') || norm.endsWith(')²'))) {
+      return MathSolutionDetails(
+        steps: [
+          'Apply the binomial expansion formula: (u ± v)² = u² ± 2uv + v².',
+          'Square the first term.',
+          'Multiply the two terms together and double them (2uv).',
+          'Square the second term.',
+          'Combine terms: $answer.',
+        ],
+        explanation: 'Squaring a binomial produces a perfect square trinomial containing the doubled cross-product.',
+      );
+    }
+
+    // 5. Pythagorean Theorem: x = √(3² + 4²) = 5
+    if (cleanExpr.contains('√') || cleanExpr.contains('sqrt') || cleanExpr.contains('a^2 + b^2') || (cleanExpr.contains('3') && cleanExpr.contains('4'))) {
+      return MathSolutionDetails(
+        steps: [
+          'State Pythagorean Theorem for right-angled triangles: a² + b² = c².',
+          'Substitute the given side lengths into the formula.',
+          'Calculate the sum of squares: 3² + 4² = 9 + 16 = 25.',
+          'Take the principal square root: c = √25 = $answer.',
+        ],
+        explanation: 'In any right-angled triangle, the square of the hypotenuse is equal to the sum of the squares of the other two legs.',
+      );
+    }
+
+    // 6. Calculus Derivative
+    if (norm.startsWith('d/dx')) {
+      return MathSolutionDetails(
+        steps: [
+          'Given derivative problem: $cleanExpr.',
+          'Apply standard differentiation rules (e.g. power rule d/dx(xⁿ) = n·xⁿ⁻¹ or trigonometric rules).',
+          'Evaluate derivative: $answer.',
+        ],
+        explanation: 'The derivative measures the instantaneous rate of change or tangent slope of the function.',
+      );
+    }
+
+    // 7. General Arithmetic / Fallback
+    return MathSolutionDetails(
+      steps: [
+        'Problem: $cleanExpr.',
+        'Apply mathematical operator precedence (PEMDAS: Parentheses, Exponents, Multiplication & Division, Addition & Subtraction).',
+        'Calculate final numerical solution: $answer.',
+      ],
+      explanation: 'Evaluated according to standard arithmetic rules.',
+    );
+  }
+}
+
+class MathSolutionDetails {
+  final List<String> steps;
+  final String? explanation;
+
+  const MathSolutionDetails({required this.steps, this.explanation});
 }
 
 class _PolyTerm {

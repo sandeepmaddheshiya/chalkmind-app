@@ -109,69 +109,73 @@ class WhiteboardNotifier extends Notifier<WhiteboardState> {
     _executeCommand(command);
 
     if (stroke.toolType.isDrawingTool) {
-      // 1. Check if the latest strokes form an equation ending with '='
-      final equationStrokes = HandwritingMathEngine.getEquationStrokes(
-        state.project.currentPage.strokes,
-      );
-
-      if (equationStrokes != null && equationStrokes.length >= 2) {
-        // Teacher is writing a math equation!
-        // Suppress any geometric shape suggestion
-        if (state.shapeSuggestion != null) {
-          state = state.copyWith(shapeSuggestion: () => null);
-        }
-
-        // STEP 1: Fast real-time local evaluation (0ms latency!)
-        final localResult = HandwritingMathEngine.detectHandwrittenEquation(
+      // 1. Check if the latest strokes form an equation ending with '=' (if Auto Math is enabled)
+      if (state.isAutoMathEnabled) {
+        final equationStrokes = HandwritingMathEngine.getEquationStrokes(
           state.project.currentPage.strokes,
         );
 
-        if (localResult != null) {
-          _visionAiDebounceTimer?.cancel();
-          // Solved instantly in real time (0ms)!
-          state = state.copyWith(
-            handwritingMathResult: () => localResult,
-            isCalculatingMath: false,
-            shapeSuggestion: () => null,
-          );
-          return;
-        }
+        if (equationStrokes != null && equationStrokes.length >= 2) {
+          // Teacher is writing a math equation!
+          // Suppress any geometric shape suggestion
+          if (state.shapeSuggestion != null) {
+            state = state.copyWith(shapeSuggestion: () => null);
+          }
 
-        // STEP 2: If local evaluation didn't resolve (e.g. geometry diagram, triangle with unknown x):
-        // Debounce Vision AI by 500ms to avoid flooding upstream workers on every pen touch
-        _visionAiDebounceTimer?.cancel();
-        state = state.copyWith(isCalculatingMath: true);
-        _visionAiDebounceTimer = Timer(const Duration(milliseconds: 500), () {
-          final problemStrokes = HandwritingMathEngine.getProblemStrokes(
+          // STEP 1: Fast real-time local evaluation (0ms latency!)
+          final localResult = HandwritingMathEngine.detectHandwrittenEquation(
             state.project.currentPage.strokes,
           );
-          _triggerVisionAiMath(problemStrokes);
-        });
-        return;
+
+          if (localResult != null) {
+            _visionAiDebounceTimer?.cancel();
+            // Solved instantly in real time (0ms)!
+            state = state.copyWith(
+              handwritingMathResult: () => localResult,
+              isCalculatingMath: false,
+              shapeSuggestion: () => null,
+            );
+            return;
+          }
+
+          // STEP 2: If local evaluation didn't resolve (e.g. geometry diagram, triangle with unknown x):
+          // Debounce Vision AI by 500ms to avoid flooding upstream workers on every pen touch
+          _visionAiDebounceTimer?.cancel();
+          state = state.copyWith(isCalculatingMath: true);
+          _visionAiDebounceTimer = Timer(const Duration(milliseconds: 500), () {
+            final problemStrokes = HandwritingMathEngine.getProblemStrokes(
+              state.project.currentPage.strokes,
+            );
+            _triggerVisionAiMath(problemStrokes);
+          });
+          return;
+        }
       }
 
-      // 2. Geometric Shape Recognition (Polygons, Circles, Stars, Lines, Arrows)
-      final detection = ShapeDetector.detectShape(stroke) ??
-          ShapeDetector.detectMultiStrokeShape(state.project.currentPage.strokes);
+      // 2. Geometric Shape Recognition (if Auto Shape is enabled)
+      if (state.isAutoShapeEnabled) {
+        final detection = ShapeDetector.detectShape(stroke) ??
+            ShapeDetector.detectMultiStrokeShape(state.project.currentPage.strokes);
 
-      if (detection != null) {
-        state = state.copyWith(
-          shapeSuggestion: () => detection,
-          handwritingMathResult: () => null,
-        );
-      } else {
-        if (state.shapeSuggestion != null) {
-          state = state.copyWith(shapeSuggestion: () => null);
-        }
-        if (state.handwritingMathResult != null) {
-          state = state.copyWith(handwritingMathResult: () => null);
+        if (detection != null) {
+          state = state.copyWith(
+            shapeSuggestion: () => detection,
+            handwritingMathResult: () => null,
+          );
+        } else {
+          if (state.shapeSuggestion != null) {
+            state = state.copyWith(shapeSuggestion: () => null);
+          }
+          if (state.handwritingMathResult != null) {
+            state = state.copyWith(handwritingMathResult: () => null);
+          }
         }
       }
     }
   }
 
   void _triggerVisionAiMath(List<Stroke> strokes) async {
-    if (strokes.length < 2) {
+    if (strokes.isEmpty) {
       state = state.copyWith(isCalculatingMath: false);
       return;
     }
@@ -264,6 +268,80 @@ class WhiteboardNotifier extends Notifier<WhiteboardState> {
       handwritingMathResult: () => null,
       isCalculatingMath: false,
     );
+  }
+
+  void toggleAutoShape() {
+    state = state.copyWith(isAutoShapeEnabled: !state.isAutoShapeEnabled);
+  }
+
+  void toggleAutoMath() {
+    state = state.copyWith(isAutoMathEnabled: !state.isAutoMathEnabled);
+  }
+
+  void setAutoShape(bool enabled) {
+    state = state.copyWith(isAutoShapeEnabled: enabled);
+  }
+
+  void setAutoMath(bool enabled) {
+    state = state.copyWith(isAutoMathEnabled: enabled);
+  }
+
+  /// Solves only the strokes currently selected by the teacher using the selection tool
+  Future<void> solveSelectedStrokes() async {
+    final selectedIds = state.selectedObjectIds;
+    if (selectedIds.isEmpty) return;
+
+    final selectedStrokes = state.project.currentPage.strokes
+        .where((s) => selectedIds.contains(s.id))
+        .toList();
+
+    if (selectedStrokes.isEmpty) return;
+
+    _visionAiDebounceTimer?.cancel();
+    state = state.copyWith(isCalculatingMath: true);
+
+    // 1. Try local 0ms solver on selected strokes first
+    final localResult = HandwritingMathEngine.detectHandwrittenEquation(selectedStrokes);
+    if (localResult != null) {
+      state = state.copyWith(
+        handwritingMathResult: () => localResult,
+        isCalculatingMath: false,
+        shapeSuggestion: () => null,
+      );
+      return;
+    }
+
+    // 2. Multimodal AI solving for selected strokes
+    _triggerVisionAiMath(selectedStrokes);
+  }
+
+  /// Inserts pedagogical step-by-step mathematical reasoning directly onto the whiteboard
+  void insertMathSteps(HandwritingMathResult result) {
+    final buffer = StringBuffer();
+    buffer.writeln('${result.expression} ${result.answer}');
+    if (result.steps.isNotEmpty) {
+      buffer.writeln('');
+      for (int i = 0; i < result.steps.length; i++) {
+        buffer.writeln('Step ${i + 1}: ${result.steps[i]}');
+      }
+    }
+    if (result.explanation != null && result.explanation!.isNotEmpty) {
+      buffer.writeln('');
+      buffer.writeln('Explanation: ${result.explanation}');
+    }
+
+    final pos = result.insertPosition + const Offset(0, 35);
+    final textObj = TextObject(
+      id: const Uuid().v4(),
+      text: buffer.toString().trim(),
+      position: pos,
+      fontSize: 16.0,
+      colorValue: result.strokeColorValue,
+      isBold: false,
+    );
+    final cmd = AddTextCommand(textObj);
+    _executeCommand(cmd);
+    state = state.copyWith(handwritingMathResult: () => null);
   }
 
   void insertMathCalculation(String equationText, {Offset? position}) {
@@ -374,6 +452,10 @@ class WhiteboardNotifier extends Notifier<WhiteboardState> {
 
   void setSelectedObjects(Set<String> ids) {
     state = state.copyWith(selectedObjectIds: ids);
+  }
+
+  void clearSelection() {
+    setSelectedObjects({});
   }
 
   void deleteSelected() {

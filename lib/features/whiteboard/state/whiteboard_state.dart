@@ -24,6 +24,8 @@ class WhiteboardState {
   final MathEvaluationResult? detectedMathResult;
   final HandwritingMathResult? handwritingMathResult;
   final bool isCalculatingMath;
+  final bool isAutoShapeEnabled;
+  final bool isAutoMathEnabled;
 
   const WhiteboardState({
     required this.project,
@@ -39,6 +41,8 @@ class WhiteboardState {
     this.isLeftHanded = false,
     this.isSaving = false,
     this.isCalculatingMath = false,
+    this.isAutoShapeEnabled = true,
+    this.isAutoMathEnabled = true,
     this.zoomScale = 1.0,
     this.panOffset = Offset.zero,
     this.shapeSuggestion,
@@ -62,6 +66,8 @@ class WhiteboardState {
     bool? isLeftHanded,
     bool? isSaving,
     bool? isCalculatingMath,
+    bool? isAutoShapeEnabled,
+    bool? isAutoMathEnabled,
     double? zoomScale,
     Offset? panOffset,
     ShapeDetectionResult? Function()? shapeSuggestion,
@@ -82,6 +88,8 @@ class WhiteboardState {
       isLeftHanded: isLeftHanded ?? this.isLeftHanded,
       isSaving: isSaving ?? this.isSaving,
       isCalculatingMath: isCalculatingMath ?? this.isCalculatingMath,
+      isAutoShapeEnabled: isAutoShapeEnabled ?? this.isAutoShapeEnabled,
+      isAutoMathEnabled: isAutoMathEnabled ?? this.isAutoMathEnabled,
       zoomScale: zoomScale ?? this.zoomScale,
       panOffset: panOffset ?? this.panOffset,
       shapeSuggestion: shapeSuggestion != null ? shapeSuggestion() : this.shapeSuggestion,

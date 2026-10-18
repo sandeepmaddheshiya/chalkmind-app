@@ -34,21 +34,21 @@ class AiMathService {
         '1. If it contains an algebraic formula, identity, or expression to factor or expand (e.g. "a³ - b³ =", "(a + b)² =", "a² - b² =", "x² - 9 ="):\n'
         'Provide the factored or expanded algebraic identity.\n'
         'Example:\n'
-        '{"expression": "a³ - b³ =", "answer": "(a - b)(a² + ab + b²)"}\n'
+        '{"expression": "a³ - b³ =", "answer": "(a - b)(a² + ab + b²)", "steps": ["Identify difference of cubes identity: u³ - v³ = (u - v)(u² + uv + v²)", "Set u = a and v = b", "Factor: (a - b)(a² + ab + b²)"], "explanation": "Difference of cubes factors into a linear binomial and an irreducible quadratic."}\n'
         '2. If it contains a geometry figure or diagram (e.g. a right triangle with legs 3 and 4, hypotenuse x, with "x =" or "x"):\n'
         'Apply geometric theorems (such as Pythagorean theorem a² + b² = c², trigonometry, angle sum, area, perimeter) to solve for the requested unknown variable.\n'
         'Example response for a right triangle with legs 3, 4 and hypotenuse x:\n'
-        '{"expression": "x = √(3² + 4²) =", "answer": "5"}\n'
+        '{"expression": "x = √(3² + 4²) =", "answer": "5", "steps": ["State Pythagorean theorem: a² + b² = c²", "Substitute legs: 3² + 4² = x² => 9 + 16 = 25", "Take square root: x = √25 = 5"], "explanation": "In any right triangle, the square of the hypotenuse equals the sum of squares of the legs."}\n'
         '3. If it contains a system of equations or variables (e.g. "x = 3", "y = x + 2", "y ="):\n'
         'Solve for the requested variable by substituting known values into the equation.\n'
         'Example: if x = 3 and y = x + 2, solving for y gives:\n'
-        '{"expression": "y = 3 + 2 =", "answer": "5"}\n'
+        '{"expression": "y = 3 + 2 =", "answer": "5", "steps": ["Substitute x = 3 into y = x + 2", "Compute y = 3 + 2 = 5"], "explanation": "Solved by direct algebraic substitution."}\n'
         '4. If it contains arithmetic or algebra (e.g. "9 * 12 =", "2² + 5 =", "15 + 25 ="):\n'
         'Carefully transcribe every digit and operator accurately without making silly mistakes. Calculate the exact solution.\n'
         'Respond ONLY with a valid JSON object in this format:\n'
-        '{"expression": "...", "answer": "..."}\n'
+        '{"expression": "...", "answer": "...", "steps": ["Step 1...", "Step 2..."], "explanation": "..."}\n'
         'Keep the "answer" field concise (e.g. "(a - b)(a² + ab + b²)" or "5" or "108").\n'
-        'If the image is not a math expression or question, respond with {"expression": "", "answer": ""}.\n'
+        'If the image is not a math expression or question, respond strictly with {"expression": "", "answer": ""}.\n'
         'Do not include markdown ticks or any text outside the JSON object.';
 
     final candidates = [
@@ -122,6 +122,8 @@ class AiMathService {
     try {
       String expression = '';
       String answer = '';
+      List<String> steps = [];
+      String? explanation;
 
       // 1. Try finding JSON object in response
       String jsonStr = content.trim();
@@ -131,8 +133,35 @@ class AiMathService {
         try {
           final data = jsonDecode(jsonStr.substring(startIdx, endIdx + 1)) as Map<String, dynamic>;
           expression = (data['expression'] as String?)?.trim() ?? '';
-          answer = (data['answer'] as String?)?.trim() ?? '';
+          answer = data['answer']?.toString().trim() ?? '';
+          if (data['steps'] is List) {
+            steps = (data['steps'] as List)
+                .map((e) => e.toString().trim())
+                .where((e) => e.isNotEmpty)
+                .toList();
+          }
+          final expl = (data['explanation'] as String?)?.trim();
+          if (expl != null && expl.isNotEmpty) {
+            explanation = expl;
+          }
         } catch (_) {}
+      }
+
+      // If the AI explicitly reported no math expression:
+      if (expression.isEmpty && answer.isEmpty) {
+        return null;
+      }
+
+      // Guard against raw JSON string leaks in answer or expression
+      if (answer.contains('expression') ||
+          answer.contains('answer') ||
+          answer.contains('{') ||
+          answer.contains('}') ||
+          expression.contains('expression') ||
+          expression.contains('answer') ||
+          expression.contains('{') ||
+          expression.contains('}')) {
+        return null;
       }
 
       // 2. If JSON didn't yield an answer, parse direct plaintext response (common in reasoning models)
@@ -141,6 +170,10 @@ class AiMathService {
             .replaceAll('```json', '')
             .replaceAll('```', '')
             .trim();
+        // If clean contains json markers, reject
+        if (clean.contains('{') || clean.contains('}')) {
+          return null;
+        }
         // Remove trailing or leading quotes
         if (clean.startsWith('"') && clean.endsWith('"') && clean.length > 2) {
           clean = clean.substring(1, clean.length - 1).trim();
@@ -157,6 +190,18 @@ class AiMathService {
 
       if (answer.isEmpty) return null;
       if (expression.isEmpty) expression = answer;
+
+      // Double-check no JSON artifacts in answer or expression
+      if (answer.contains('{') ||
+          answer.contains('}') ||
+          answer.contains('expression') ||
+          answer.contains('answer') ||
+          expression.contains('{') ||
+          expression.contains('}') ||
+          expression.contains('expression') ||
+          expression.contains('answer')) {
+        return null;
+      }
 
       // Calculate placement: placed directly after '=' along teacher's baseline slant
       Rect? unionBounds;
@@ -192,6 +237,8 @@ class AiMathService {
         strokeWidth: lastStroke.width,
         direction: dir,
         normal: normal,
+        steps: steps,
+        explanation: explanation,
       );
     } catch (_) {
       return null;

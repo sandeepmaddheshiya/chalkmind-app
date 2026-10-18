@@ -5,6 +5,7 @@ import '../models/shape_model.dart';
 import '../models/tool_type.dart';
 import 'math_evaluator.dart';
 import 'shape_detector.dart';
+import 'universal_math_engine.dart';
 
 class HandwritingMathResult {
   final String expression;
@@ -15,6 +16,8 @@ class HandwritingMathResult {
   final double strokeWidth;
   final Offset direction;
   final Offset normal;
+  final List<String> steps;
+  final String? explanation;
 
   const HandwritingMathResult({
     required this.expression,
@@ -25,6 +28,8 @@ class HandwritingMathResult {
     required this.strokeWidth,
     required this.direction,
     required this.normal,
+    this.steps = const [],
+    this.explanation,
   });
 }
 
@@ -190,6 +195,8 @@ class HandwritingMathEngine {
     final targetHeight = math.max(28.0, math.min(140.0, equalSignInfo.length * 1.5));
     final insertOffset = eqCenter + dir * (equalSignInfo.length * 0.9 + 25.0) - normal * (targetHeight * 0.5);
 
+    final details = UniversalMathEngine.getStepsAndExplanation(tokenString, evalResult.resultText);
+
     return HandwritingMathResult(
       expression: '$tokenString =',
       answer: evalResult.resultText,
@@ -199,6 +206,8 @@ class HandwritingMathEngine {
       strokeWidth: equalSignInfo.strokeWidth,
       direction: dir,
       normal: normal,
+      steps: details.steps,
+      explanation: details.explanation,
     );
   }
 

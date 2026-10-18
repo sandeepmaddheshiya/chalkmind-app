@@ -7,7 +7,9 @@ import 'package:boardflow/features/whiteboard/recognition/handwriting_math_engin
 import 'package:boardflow/features/whiteboard/recognition/handwriting_stroke_generator.dart';
 import 'package:boardflow/features/whiteboard/recognition/math_evaluator.dart';
 import 'package:boardflow/features/whiteboard/recognition/shape_detector.dart';
-
+import 'package:boardflow/features/whiteboard/recognition/universal_math_engine.dart';
+import 'package:boardflow/features/whiteboard/models/project_model.dart';
+import 'package:boardflow/features/whiteboard/state/whiteboard_state.dart';
 void main() {
   group('MathEvaluator tests', () {
     test('Basic arithmetic evaluation', () {
@@ -1151,6 +1153,37 @@ void main() {
       for (final s in strokes) {
         expect(s.points, isNotEmpty);
       }
+    });
+
+    test('Generates pedagogical steps and theoretical explanation for a^3 - b^3', () {
+      final details = UniversalMathEngine.getStepsAndExplanation('a^3 - b^3 =', '(a - b)(a² + ab + b²)');
+      expect(details.steps, isNotEmpty);
+      expect(details.steps.length, greaterThanOrEqualTo(3));
+      expect(details.steps.first, contains('Difference of Cubes'));
+      expect(details.explanation, isNotNull);
+      expect(details.explanation!, contains('linear factor'));
+    });
+
+    test('Generates pedagogical steps for Pythagorean Theorem', () {
+      final details = UniversalMathEngine.getStepsAndExplanation('x = √(3² + 4²) =', '5');
+      expect(details.steps, isNotEmpty);
+      expect(details.steps.first, contains('Pythagorean Theorem'));
+      expect(details.explanation, contains('hypotenuse'));
+    });
+  });
+
+  group('Auto Toggles & Selection State Tests', () {
+    test('WhiteboardState defaults to auto shape and auto math enabled', () {
+      final state = WhiteboardState(project: ProjectModel.createEmpty(title: 'Test'));
+      expect(state.isAutoShapeEnabled, isTrue);
+      expect(state.isAutoMathEnabled, isTrue);
+    });
+
+    test('WhiteboardState toggles auto shape and auto math', () {
+      var state = WhiteboardState(project: ProjectModel.createEmpty(title: 'Test'));
+      state = state.copyWith(isAutoShapeEnabled: false, isAutoMathEnabled: false);
+      expect(state.isAutoShapeEnabled, isFalse);
+      expect(state.isAutoMathEnabled, isFalse);
     });
   });
 }

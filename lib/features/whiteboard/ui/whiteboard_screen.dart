@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../canvas/whiteboard_canvas.dart';
 import '../state/whiteboard_notifier.dart';
+import 'ai_recognition_settings_dialog.dart';
 import 'export_dialog.dart';
 import 'math_calculator_dialog.dart';
 import 'math_suggestion_overlay.dart';
 import 'page_strip_widget.dart';
+import 'selection_action_overlay.dart';
 import 'shape_suggestion_overlay.dart';
 import 'tool_properties_panel.dart';
 import 'toolbar_widget.dart';
@@ -163,6 +165,18 @@ class _WhiteboardScreenState extends ConsumerState<WhiteboardScreen> {
             },
           ),
 
+          // Smart Recognition & AI Automation Settings
+          IconButton(
+            icon: Icon(
+              Icons.auto_awesome_rounded,
+              color: (state.isAutoMathEnabled || state.isAutoShapeEnabled)
+                  ? const Color(0xFF059669)
+                  : Colors.grey,
+            ),
+            tooltip: 'Smart Recognition & AI Settings',
+            onPressed: () => AiRecognitionSettingsDialog.show(context),
+          ),
+
           // Background & Properties Toggle
           IconButton(
             icon: Icon(
@@ -220,6 +234,14 @@ class _WhiteboardScreenState extends ConsumerState<WhiteboardScreen> {
               right: state.isLeftHanded ? null : 80,
               child: const ToolPropertiesPanel(),
             ),
+
+          // Floating Selection Action Bar (Solve Selected, Delete, Clear)
+          const Positioned(
+            bottom: 84,
+            left: 0,
+            right: 0,
+            child: SelectionActionOverlay(),
+          ),
 
           // Bottom Floating Page Strip & Navigation
           const Positioned(
