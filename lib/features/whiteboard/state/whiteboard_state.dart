@@ -26,6 +26,7 @@ class WhiteboardState {
   final bool isCalculatingMath;
   final bool isAutoShapeEnabled;
   final bool isAutoMathEnabled;
+  final bool isInfiniteCanvas;
   final Map<ToolType, ToolPreset> toolPresets;
 
   const WhiteboardState({
@@ -44,6 +45,7 @@ class WhiteboardState {
     this.isCalculatingMath = false,
     this.isAutoShapeEnabled = true,
     this.isAutoMathEnabled = true,
+    this.isInfiniteCanvas = false,
     this.zoomScale = 1.0,
     this.panOffset = Offset.zero,
     this.shapeSuggestion,
@@ -70,6 +72,7 @@ class WhiteboardState {
     bool? isCalculatingMath,
     bool? isAutoShapeEnabled,
     bool? isAutoMathEnabled,
+    bool? isInfiniteCanvas,
     double? zoomScale,
     Offset? panOffset,
     ShapeDetectionResult? Function()? shapeSuggestion,
@@ -93,6 +96,7 @@ class WhiteboardState {
       isCalculatingMath: isCalculatingMath ?? this.isCalculatingMath,
       isAutoShapeEnabled: isAutoShapeEnabled ?? this.isAutoShapeEnabled,
       isAutoMathEnabled: isAutoMathEnabled ?? this.isAutoMathEnabled,
+      isInfiniteCanvas: isInfiniteCanvas ?? this.isInfiniteCanvas,
       zoomScale: zoomScale ?? this.zoomScale,
       panOffset: panOffset ?? this.panOffset,
       shapeSuggestion: shapeSuggestion != null ? shapeSuggestion() : this.shapeSuggestion,

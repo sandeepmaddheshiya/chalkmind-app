@@ -313,6 +313,14 @@ class WhiteboardNotifier extends Notifier<WhiteboardState> {
     state = state.copyWith(isAutoMathEnabled: enabled);
   }
 
+  void setInfiniteCanvas(bool isInfinite) {
+    state = state.copyWith(isInfiniteCanvas: isInfinite);
+  }
+
+  void toggleCanvasMode() {
+    state = state.copyWith(isInfiniteCanvas: !state.isInfiniteCanvas);
+  }
+
   /// Solves only the strokes currently selected by the teacher using the selection tool
   Future<void> solveSelectedStrokes() async {
     final selectedIds = state.selectedObjectIds;

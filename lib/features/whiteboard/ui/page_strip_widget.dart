@@ -13,6 +13,9 @@ class PageStripWidget extends ConsumerWidget {
     final currentPageIndex = state.project.currentPageIndex;
     final totalPages = state.project.totalPages;
 
+    final isInfinite = state.isInfiniteCanvas;
+    final itemNoun = isInfinite ? 'Board' : 'Page';
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
@@ -55,10 +58,10 @@ class PageStripWidget extends ConsumerWidget {
             ),
           ],
 
-          // Previous Page Button
+          // Previous Page/Board Button
           IconButton(
             icon: const Icon(Icons.chevron_left_rounded, size: 24),
-            tooltip: 'Previous Page',
+            tooltip: 'Previous $itemNoun',
             onPressed: currentPageIndex > 0
                 ? () {
                     ref
@@ -68,7 +71,7 @@ class PageStripWidget extends ConsumerWidget {
                 : null,
           ),
 
-          // Page Counter Indicator
+          // Page/Board Counter Indicator
           GestureDetector(
             onTap: () => _showPageOverviewSheet(context, ref),
             child: Container(
@@ -77,20 +80,35 @@ class PageStripWidget extends ConsumerWidget {
                 color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: Text(
-                'Page ${currentPageIndex + 1} of $totalPages',
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isInfinite
+                        ? Icons.all_inclusive_rounded
+                        : Icons.auto_stories_rounded,
+                    size: 14,
+                    color: isInfinite
+                        ? const Color(0xFF6366F1)
+                        : Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '$itemNoun ${currentPageIndex + 1} of $totalPages',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
 
-          // Next Page Button
+          // Next Page/Board Button
           IconButton(
             icon: const Icon(Icons.chevron_right_rounded, size: 24),
-            tooltip: 'Next Page',
+            tooltip: 'Next $itemNoun',
             onPressed: currentPageIndex < totalPages - 1
                 ? () {
                     ref
@@ -107,19 +125,19 @@ class PageStripWidget extends ConsumerWidget {
             margin: const EdgeInsets.symmetric(horizontal: 4),
           ),
 
-          // Add New Page Button
+          // Add New Page/Board Button
           IconButton(
             icon: const Icon(Icons.add_rounded, size: 22),
-            tooltip: 'Add New Page',
+            tooltip: 'Add New $itemNoun',
             onPressed: () {
               ref.read(whiteboardControllerProvider.notifier).addNewPage();
             },
           ),
 
-          // Duplicate Current Page
+          // Duplicate Current Page/Board
           IconButton(
             icon: const Icon(Icons.content_copy_rounded, size: 18),
-            tooltip: 'Duplicate Page',
+            tooltip: 'Duplicate $itemNoun',
             onPressed: () {
               ref
                   .read(whiteboardControllerProvider.notifier)
@@ -127,10 +145,10 @@ class PageStripWidget extends ConsumerWidget {
             },
           ),
 
-          // Clear Page
+          // Clear Current Page/Board
           IconButton(
             icon: const Icon(Icons.clear_all_rounded, size: 22),
-            tooltip: 'Clear Board',
+            tooltip: 'Clear $itemNoun',
             onPressed: () => _confirmClearPage(context, ref),
           ),
         ],

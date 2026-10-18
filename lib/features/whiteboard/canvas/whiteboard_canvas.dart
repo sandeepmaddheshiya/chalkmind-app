@@ -11,6 +11,7 @@ import '../rendering/background_painter.dart';
 import '../rendering/board_painter.dart';
 import '../rendering/selection_painter.dart';
 import '../state/whiteboard_notifier.dart';
+import '../ui/canvas_zoom_controls.dart';
 
 class WhiteboardCanvas extends ConsumerStatefulWidget {
   const WhiteboardCanvas({super.key});
@@ -38,7 +39,49 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
   final Set<int> _activePointers = {};
 
   @override
+  void initState() {
+    super.initState();
+    _transformController.addListener(_onTransformChanged);
+  }
+
+  void _onTransformChanged() {
+    final scale = _transformController.value.getMaxScaleOnAxis();
+    ref.read(whiteboardControllerProvider.notifier).setZoomAndPan(
+      scale,
+      Offset(
+        _transformController.value.entry(0, 3),
+        _transformController.value.entry(1, 3),
+      ),
+    );
+  }
+
+  void _zoomBy(double factor) {
+    final matrix = _transformController.value.clone();
+    final currentScale = matrix.getMaxScaleOnAxis();
+    final isInfinite = ref.read(whiteboardControllerProvider).isInfiniteCanvas;
+    final minScale = isInfinite ? 0.1 : 0.4;
+    final maxScale = isInfinite ? 6.0 : 3.5;
+    final targetScale = (currentScale * factor).clamp(minScale, maxScale);
+    final actualFactor = targetScale / currentScale;
+
+    final renderBox = context.findRenderObject() as RenderBox?;
+    final center = renderBox != null
+        ? renderBox.size.center(Offset.zero)
+        : const Offset(400, 600);
+
+    matrix.translate(center.dx, center.dy);
+    matrix.scale(actualFactor);
+    matrix.translate(-center.dx, -center.dy);
+    _transformController.value = matrix;
+  }
+
+  void _resetTransform() {
+    _transformController.value = Matrix4.identity();
+  }
+
+  @override
   void dispose() {
+    _transformController.removeListener(_onTransformChanged);
     _transformController.dispose();
     super.dispose();
   }
@@ -51,6 +94,21 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
   Widget build(BuildContext context) {
     final state = ref.watch(whiteboardControllerProvider);
     final currentPage = state.project.currentPage;
+    final isInfinite = state.isInfiniteCanvas;
+
+    // Listen for zoom actions from floating zoom toolbar
+    ref.listen<CanvasZoomAction>(canvasZoomActionProvider, (prev, next) {
+      if (next == CanvasZoomAction.zoomIn) {
+        _zoomBy(1.25);
+        ref.read(canvasZoomActionProvider.notifier).reset();
+      } else if (next == CanvasZoomAction.zoomOut) {
+        _zoomBy(0.80);
+        ref.read(canvasZoomActionProvider.notifier).reset();
+      } else if (next == CanvasZoomAction.reset) {
+        _resetTransform();
+        ref.read(canvasZoomActionProvider.notifier).reset();
+      }
+    });
 
     // Calculate bounding box for selected elements if any
     Rect? selectedBounds;
@@ -81,73 +139,84 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
 
     final isTwoFinger = _activePointers.length >= 2;
 
-    return InteractiveViewer(
-      transformationController: _transformController,
-      boundaryMargin: const EdgeInsets.all(4000),
-      minScale: 0.25,
-      maxScale: 5.0,
-      panEnabled: isTwoFinger,
-      scaleEnabled: isTwoFinger,
-      child: Listener(
-        behavior: HitTestBehavior.opaque,
-        onPointerDown: (event) {
-          _activePointers.add(event.pointer);
-          if (_activePointers.length >= 2) {
-            // Cancel drawing if second finger lands
-            setState(() {
-              _activePoints.clear();
-              _shapeStart = null;
-              _shapeEnd = null;
-              _eraserPoint = null;
-              _laserPoint = null;
-              _selectionMarquee = null;
-            });
-            return;
-          }
-
-          final canvasPoint = _screenToCanvas(event.localPosition);
-          _handlePointerDown(canvasPoint, event, selectedBounds);
-        },
-        onPointerMove: (event) {
-          if (_activePointers.length >= 2) return;
-          final canvasPoint = _screenToCanvas(event.localPosition);
-          _handlePointerMove(canvasPoint, event);
-        },
-        onPointerUp: (event) {
-          _activePointers.remove(event.pointer);
-          if (_activePointers.isNotEmpty) return;
-          final canvasPoint = _screenToCanvas(event.localPosition);
-          _handlePointerUp(canvasPoint);
-        },
-        onPointerCancel: (event) {
-          _activePointers.remove(event.pointer);
-          setState(() {
-            _activePoints.clear();
-            _shapeStart = null;
-            _shapeEnd = null;
-            _eraserPoint = null;
-            _laserPoint = null;
-            _selectionMarquee = null;
-          });
-        },
-        child: Stack(
-          children: [
-            // Layer 1: Background Surface (Grid, Ruled, Dotted, Plain)
-            Positioned.fill(
-              child: RepaintBoundary(
-                child: CustomPaint(
-                  painter: BackgroundPainter(
-                    background: currentPage.background,
-                  ),
+    return Stack(
+      children: [
+        // Layer 0: Seamless Full-Screen Background Surface (Infinite Canvas or Paginated Desk + Sheet)
+        Positioned.fill(
+          child: AnimatedBuilder(
+            animation: _transformController,
+            builder: (context, _) {
+              return CustomPaint(
+                painter: BackgroundPainter(
+                  background: currentPage.background,
+                  isInfiniteCanvas: isInfinite,
+                  transform: _transformController.value,
                 ),
-              ),
-            ),
+              );
+            },
+          ),
+        ),
 
-            // Layer 2: Committed Board Content (Strokes, Shapes, Texts)
-            Positioned.fill(
-              child: RepaintBoundary(
-                child: CustomPaint(
-                  painter: BoardPainter(
+        // Layer 1: Interactive Canvas Content & Stylus Gestures
+        Positioned.fill(
+          child: InteractiveViewer(
+            transformationController: _transformController,
+            boundaryMargin: isInfinite
+                ? const EdgeInsets.all(50000)
+                : const EdgeInsets.symmetric(horizontal: 1000, vertical: 1200),
+            minScale: isInfinite ? 0.10 : 0.40,
+            maxScale: isInfinite ? 6.0 : 3.5,
+            panEnabled: isTwoFinger,
+            scaleEnabled: isTwoFinger,
+            child: Listener(
+              behavior: HitTestBehavior.opaque,
+              onPointerDown: (event) {
+                _activePointers.add(event.pointer);
+                if (_activePointers.length >= 2) {
+                  // Cancel drawing if second finger lands
+                  setState(() {
+                    _activePoints.clear();
+                    _shapeStart = null;
+                    _shapeEnd = null;
+                    _eraserPoint = null;
+                    _laserPoint = null;
+                    _selectionMarquee = null;
+                  });
+                  return;
+                }
+
+                final canvasPoint = _screenToCanvas(event.localPosition);
+                _handlePointerDown(canvasPoint, event, selectedBounds);
+              },
+              onPointerMove: (event) {
+                if (_activePointers.length >= 2) return;
+                final canvasPoint = _screenToCanvas(event.localPosition);
+                _handlePointerMove(canvasPoint, event);
+              },
+              onPointerUp: (event) {
+                _activePointers.remove(event.pointer);
+                if (_activePointers.isNotEmpty) return;
+                final canvasPoint = _screenToCanvas(event.localPosition);
+                _handlePointerUp(canvasPoint);
+              },
+              onPointerCancel: (event) {
+                _activePointers.remove(event.pointer);
+                setState(() {
+                  _activePoints.clear();
+                  _shapeStart = null;
+                  _shapeEnd = null;
+                  _eraserPoint = null;
+                  _laserPoint = null;
+                  _selectionMarquee = null;
+                });
+              },
+              child: Stack(
+                children: [
+                  // Layer 1: Committed Board Content (Strokes, Shapes, Texts)
+                  Positioned.fill(
+                    child: RepaintBoundary(
+                      child: CustomPaint(
+                        painter: BoardPainter(
                     strokes: currentPage.strokes,
                     shapes: currentPage.shapes,
                     texts: currentPage.texts,
@@ -191,9 +260,12 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
                 ),
               ),
             ),
-          ],
+                ],
+              ),
+            ),
+          ),
         ),
-      ),
+      ],
     );
   }
 

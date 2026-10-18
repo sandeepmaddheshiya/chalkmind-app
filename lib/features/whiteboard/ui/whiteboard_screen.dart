@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../canvas/whiteboard_canvas.dart';
 import '../state/whiteboard_notifier.dart';
 import 'ai_recognition_settings_dialog.dart';
+import 'canvas_zoom_controls.dart';
 import 'export_dialog.dart';
 import 'math_calculator_dialog.dart';
 import 'math_suggestion_overlay.dart';
@@ -177,6 +178,36 @@ class _WhiteboardScreenState extends ConsumerState<WhiteboardScreen> {
             onPressed: () => AiRecognitionSettingsDialog.show(context),
           ),
 
+          // Canvas Mode Toggle (Paginated Sheet vs Infinite Canvas)
+          IconButton(
+            icon: Icon(
+              state.isInfiniteCanvas
+                  ? Icons.all_inclusive_rounded
+                  : Icons.auto_stories_rounded,
+              color: state.isInfiniteCanvas
+                  ? const Color(0xFF6366F1)
+                  : Theme.of(context).colorScheme.primary,
+            ),
+            tooltip: state.isInfiniteCanvas
+                ? 'Canvas Mode: Infinite (Tap to switch to Paginated)'
+                : 'Canvas Mode: Paginated (Tap to switch to Infinite)',
+            onPressed: () {
+              ref
+                  .read(whiteboardControllerProvider.notifier)
+                  .toggleCanvasMode();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    !state.isInfiniteCanvas
+                        ? '♾️ Switched to Infinite Canvas (Boundless)'
+                        : '📄 Switched to Paginated Mode (Page Sheet)',
+                  ),
+                  duration: const Duration(seconds: 1),
+                ),
+              );
+            },
+          ),
+
           // Background & Properties Toggle
           IconButton(
             icon: Icon(
@@ -236,19 +267,27 @@ class _WhiteboardScreenState extends ConsumerState<WhiteboardScreen> {
             ),
 
           // Floating Selection Action Bar (Solve Selected, Delete, Clear)
-          const Positioned(
-            bottom: 84,
+          Positioned(
+            bottom: MediaQuery.of(context).padding.bottom + 76,
             left: 0,
             right: 0,
-            child: SelectionActionOverlay(),
+            child: const SelectionActionOverlay(),
+          ),
+
+          // Bottom Floating Canvas Zoom & Pan Controls
+          Positioned(
+            bottom: MediaQuery.of(context).padding.bottom + 16,
+            left: state.isLeftHanded ? null : 16,
+            right: state.isLeftHanded ? 16 : null,
+            child: const CanvasZoomControls(),
           ),
 
           // Bottom Floating Page Strip & Navigation
-          const Positioned(
-            bottom: 20,
+          Positioned(
+            bottom: MediaQuery.of(context).padding.bottom + 16,
             left: 0,
             right: 0,
-            child: Center(
+            child: const Center(
               child: PageStripWidget(),
             ),
           ),

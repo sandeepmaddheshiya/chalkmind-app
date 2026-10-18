@@ -3,23 +3,120 @@ import '../models/background_style.dart';
 
 class BackgroundPainter extends CustomPainter {
   final CanvasBackground background;
-  final Rect? canvasBounds;
+  final bool isInfiniteCanvas;
+  final Rect? pageBounds;
+  final Matrix4? transform;
 
   const BackgroundPainter({
     required this.background,
-    this.canvasBounds,
+    this.isInfiniteCanvas = false,
+    this.pageBounds,
+    this.transform,
   });
+
+  // Standard high-definition paginated sheet size (A4 / Tablet presentation standard)
+  static const Rect defaultPageRect = Rect.fromLTWH(40, 40, 1100, 1550);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final bounds = canvasBounds ?? Offset.zero & size;
+    if (isInfiniteCanvas) {
+      _paintInfinite(canvas, size);
+    } else {
+      _paintPaginated(canvas, size);
+    }
+  }
 
-    // 1. Paint base background surface color
+  void _paintInfinite(Canvas canvas, Size size) {
+    final viewportRect = Offset.zero & size;
+
+    // 1. Paint base background surface color across entire viewport
     final bgPaint = Paint()..color = background.color;
-    canvas.drawRect(bounds, bgPaint);
+    canvas.drawRect(viewportRect, bgPaint);
 
     if (background.style == BackgroundStyle.plain) return;
 
+    final matrix = transform ?? Matrix4.identity();
+    final spacing = background.spacing.clamp(16.0, 120.0);
+
+    // Compute visible scene rectangle using inverse matrix
+    final Matrix4 inverse;
+    try {
+      inverse = Matrix4.inverted(matrix);
+    } catch (_) {
+      return;
+    }
+
+    final p1 = MatrixUtils.transformPoint(inverse, Offset.zero);
+    final p2 = MatrixUtils.transformPoint(inverse, Offset(size.width, size.height));
+    final p3 = MatrixUtils.transformPoint(inverse, Offset(size.width, 0));
+    final p4 = MatrixUtils.transformPoint(inverse, Offset(0, size.height));
+
+    final minX = [p1.dx, p2.dx, p3.dx, p4.dx].reduce((a, b) => a < b ? a : b);
+    final maxX = [p1.dx, p2.dx, p3.dx, p4.dx].reduce((a, b) => a > b ? a : b);
+    final minY = [p1.dy, p2.dy, p3.dy, p4.dy].reduce((a, b) => a < b ? a : b);
+    final maxY = [p1.dy, p2.dy, p3.dy, p4.dy].reduce((a, b) => a > b ? a : b);
+
+    final sceneBounds = Rect.fromLTRB(
+      minX - spacing * 2,
+      minY - spacing * 2,
+      maxX + spacing * 2,
+      maxY + spacing * 2,
+    );
+
+    // Draw pattern in scene coordinates transformed into viewport
+    canvas.save();
+    canvas.transform(matrix.storage);
+    _drawPattern(canvas, sceneBounds);
+    canvas.restore();
+  }
+
+  void _paintPaginated(Canvas canvas, Size size) {
+    final viewportRect = Offset.zero & size;
+    final page = pageBounds ?? defaultPageRect;
+
+    // 1. Paint desk / studio background surface outside the page sheet
+    final isDark = background.isDark;
+    final deskColor = isDark ? const Color(0xFF0F172A) : const Color(0xFFE2E8F0);
+    canvas.drawRect(viewportRect, Paint()..color = deskColor);
+
+    final matrix = transform ?? Matrix4.identity();
+    canvas.save();
+    canvas.transform(matrix.storage);
+
+    // 2. Realistic soft drop shadow under page sheet
+    final shadowRRect = RRect.fromRectAndRadius(
+      page.shift(const Offset(0, 8)),
+      const Radius.circular(12),
+    );
+    final shadowPaint = Paint()
+      ..color = Colors.black.withValues(alpha: isDark ? 0.45 : 0.16)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 18);
+    canvas.drawRRect(shadowRRect, shadowPaint);
+
+    // 3. Paint page sheet surface
+    final pageRRect = RRect.fromRectAndRadius(page, const Radius.circular(12));
+    final pagePaint = Paint()..color = background.color;
+    canvas.drawRRect(pageRRect, pagePaint);
+
+    // 4. Clip to page and draw background pattern inside page sheet
+    if (background.style != BackgroundStyle.plain) {
+      canvas.save();
+      canvas.clipRRect(pageRRect);
+      _drawPattern(canvas, page);
+      canvas.restore();
+    }
+
+    // 5. Draw subtle paper page border
+    final borderPaint = Paint()
+      ..color = isDark ? Colors.white12 : Colors.black12
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+    canvas.drawRRect(pageRRect, borderPaint);
+
+    canvas.restore();
+  }
+
+  void _drawPattern(Canvas canvas, Rect bounds) {
     final isDark = background.isDark;
     final defaultPatternColor = isDark
         ? const Color(0x2EFFFFFF) // Subtle light lines for dark boards
@@ -128,6 +225,8 @@ class BackgroundPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant BackgroundPainter oldDelegate) {
     return oldDelegate.background != background ||
-        oldDelegate.canvasBounds != canvasBounds;
+        oldDelegate.isInfiniteCanvas != isInfiniteCanvas ||
+        oldDelegate.pageBounds != pageBounds ||
+        oldDelegate.transform != transform;
   }
 }

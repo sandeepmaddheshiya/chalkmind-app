@@ -1185,6 +1185,27 @@ void main() {
       expect(state.isAutoShapeEnabled, isFalse);
       expect(state.isAutoMathEnabled, isFalse);
     });
+
+    test('Canvas Mode defaults to Paginated and toggles to Infinite Canvas', () {
+      var state = WhiteboardState(project: ProjectModel.createEmpty(title: 'Test'));
+      expect(state.isInfiniteCanvas, isFalse); // Paginated by default
+
+      state = state.copyWith(isInfiniteCanvas: true);
+      expect(state.isInfiniteCanvas, isTrue); // Infinite canvas
+
+      state = state.copyWith(isInfiniteCanvas: false);
+      expect(state.isInfiniteCanvas, isFalse); // Switch back to paginated
+    });
+
+    test('Canvas zoom scale and offset update smoothly in state', () {
+      var state = WhiteboardState(project: ProjectModel.createEmpty(title: 'Test'));
+      expect(state.zoomScale, equals(1.0));
+      expect(state.panOffset, equals(Offset.zero));
+
+      state = state.copyWith(zoomScale: 1.5, panOffset: const Offset(120, 240));
+      expect(state.zoomScale, equals(1.5));
+      expect(state.panOffset, equals(const Offset(120, 240)));
+    });
   });
 }
 

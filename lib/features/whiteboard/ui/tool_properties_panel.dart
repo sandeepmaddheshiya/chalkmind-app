@@ -280,6 +280,46 @@ class ToolPropertiesPanel extends ConsumerWidget {
             }).toList(),
           ),
 
+          const SizedBox(height: 14),
+
+          // Canvas Mode (Paginated Pages vs Infinite Canvas)
+          const Text(
+            'Canvas Mode',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 6),
+          SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<bool>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment<bool>(
+                  value: false,
+                  icon: Icon(Icons.auto_stories_rounded, size: 16),
+                  label: Text('Paginated', style: TextStyle(fontSize: 11)),
+                ),
+                ButtonSegment<bool>(
+                  value: true,
+                  icon: Icon(Icons.all_inclusive_rounded, size: 16),
+                  label: Text('Infinite', style: TextStyle(fontSize: 11)),
+                ),
+              ],
+              selected: {state.isInfiniteCanvas},
+              onSelectionChanged: (set) {
+                ref
+                    .read(whiteboardControllerProvider.notifier)
+                    .setInfiniteCanvas(set.first);
+              },
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            state.isInfiniteCanvas
+                ? 'Infinite: boundless 2D canvas with unlimited panning and zoom.'
+                : 'Paginated: structured page sheets with clean page-by-page slides.',
+            style: const TextStyle(fontSize: 10, color: Colors.grey),
+          ),
+
           const Divider(height: 24),
 
           // Section 5: AI & Smart Recognition Toggles
