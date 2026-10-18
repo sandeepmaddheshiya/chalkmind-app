@@ -6,11 +6,15 @@ import '../state/whiteboard_notifier.dart';
 class WhiteboardToolbar extends ConsumerWidget {
   final VoidCallback onToggleProperties;
   final bool isPropertiesOpen;
+  final VoidCallback? onHideToolbar;
+  final GestureDragUpdateCallback? onPanUpdate;
 
   const WhiteboardToolbar({
     super.key,
     required this.onToggleProperties,
     required this.isPropertiesOpen,
+    this.onHideToolbar,
+    this.onPanUpdate,
   });
 
   @override
@@ -28,10 +32,11 @@ class WhiteboardToolbar extends ConsumerWidget {
       (ToolType.text, Icons.title_rounded, 'Text'),
       (ToolType.select, Icons.highlight_alt_rounded, 'Select'),
       (ToolType.laser, Icons.flare_rounded, 'Laser'),
+      (ToolType.hand, Icons.pan_tool_rounded, 'Pan Canvas'),
     ];
 
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1F2937) : Colors.white,
         borderRadius: BorderRadius.circular(24),
@@ -49,6 +54,22 @@ class WhiteboardToolbar extends ConsumerWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Drag Handle to place toolbar anywhere
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onPanUpdate: onPanUpdate,
+            child: Tooltip(
+              message: 'Drag to move toolbar anywhere',
+              child: Padding(
+                padding: const EdgeInsets.only(top: 2, bottom: 4),
+                child: Icon(
+                  Icons.drag_indicator_rounded,
+                  size: 18,
+                  color: isDark ? Colors.white38 : Colors.grey.shade400,
+                ),
+              ),
+            ),
+          ),
           // Active Color & Properties trigger
           GestureDetector(
             onTap: onToggleProperties,
@@ -124,17 +145,31 @@ class WhiteboardToolbar extends ConsumerWidget {
               state.isLeftHanded
                   ? Icons.dock_rounded
                   : Icons.dock_outlined,
-              size: 20,
+              size: 19,
             ),
             tooltip: state.isLeftHanded
                 ? 'Switch to Right-Handed'
                 : 'Switch to Left-Handed',
+            visualDensity: VisualDensity.compact,
             onPressed: () {
               ref
                   .read(whiteboardControllerProvider.notifier)
                   .toggleLeftHanded();
             },
           ),
+
+          // Hide / Minimize Toolbar Button
+          if (onHideToolbar != null)
+            IconButton(
+              icon: Icon(
+                Icons.visibility_off_outlined,
+                size: 18,
+                color: isDark ? Colors.white60 : Colors.grey.shade600,
+              ),
+              tooltip: 'Hide Toolbar',
+              visualDensity: VisualDensity.compact,
+              onPressed: onHideToolbar,
+            ),
         ],
       ),
     );

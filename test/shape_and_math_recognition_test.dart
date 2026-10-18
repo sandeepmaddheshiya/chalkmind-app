@@ -88,6 +88,66 @@ void main() {
       expect(result.confidence, greaterThan(0.6));
     });
 
+    test('Detects natural hand-drawn tablet circle with 72 points and NEVER classifies as Octagon', () {
+      // Simulate real tablet pen stroke: 72 points with natural wobble and hand tremor
+      final points = <StrokePoint>[];
+      const int steps = 72;
+      final center = const Offset(200, 200);
+      const radius = 80.0;
+      for (int i = 0; i <= steps; i++) {
+        final angle = (i / steps) * 2 * math.pi;
+        // Natural hand wobble (-3px to +3.5px)
+        final wobble = math.sin(i * 1.8) * 3.0;
+        final r = radius + wobble;
+        final x = center.dx + r * math.cos(angle);
+        final y = center.dy + r * math.sin(angle);
+        points.add(StrokePoint(x: x, y: y, timestamp: i * 15));
+      }
+
+      final stroke = Stroke(
+        id: 'natural-tablet-circle',
+        points: points,
+        colorValue: 0xFF000000,
+        width: 3.0,
+        toolType: ToolType.pen,
+      );
+
+      final result = ShapeDetector.detectShape(stroke);
+      expect(result, isNotNull);
+      expect(result!.shapeType, ShapeType.circle, reason: 'Must detect as Circle');
+      expect(result.shapeType, isNot(ShapeType.octagon), reason: 'Must NEVER falsely classify as Octagon');
+      expect(result.suggestedShape.shapeType, ShapeType.circle);
+      expect(result.confidence, greaterThan(0.75));
+    });
+
+    test('Detects hand-drawn oval / ellipse and recognizes as Circle', () {
+      final points = <StrokePoint>[];
+      const int steps = 60;
+      final center = const Offset(250, 250);
+      const rx = 90.0;
+      const ry = 60.0; // Aspect ratio 1.5 oval
+      for (int i = 0; i <= steps; i++) {
+        final angle = (i / steps) * 2 * math.pi;
+        final wobble = (i % 4 == 0) ? 2.0 : -1.5;
+        final x = center.dx + (rx + wobble) * math.cos(angle);
+        final y = center.dy + (ry + wobble) * math.sin(angle);
+        points.add(StrokePoint(x: x, y: y, timestamp: i * 20));
+      }
+
+      final stroke = Stroke(
+        id: 'hand-drawn-oval',
+        points: points,
+        colorValue: 0xFF000000,
+        width: 3.0,
+        toolType: ToolType.pen,
+      );
+
+      final result = ShapeDetector.detectShape(stroke);
+      expect(result, isNotNull);
+      expect(result!.shapeType, ShapeType.circle);
+      expect(result.shapeType, isNot(ShapeType.octagon));
+    });
+
     test('Detects straight line stroke', () {
       final points = <StrokePoint>[
         const StrokePoint(x: 10, y: 10, timestamp: 1),

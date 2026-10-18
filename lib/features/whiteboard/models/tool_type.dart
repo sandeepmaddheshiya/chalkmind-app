@@ -8,7 +8,8 @@ enum ToolType {
   shape,
   text,
   select,
-  laser;
+  laser,
+  hand;
 
   bool get isDrawingTool =>
       this == ToolType.pen ||
@@ -18,6 +19,8 @@ enum ToolType {
 
   bool get isEraser =>
       this == ToolType.strokeEraser || this == ToolType.areaEraser;
+
+  bool get isPan => this == ToolType.hand;
 
   String get displayName {
     switch (this) {
@@ -41,6 +44,8 @@ enum ToolType {
         return 'Select';
       case ToolType.laser:
         return 'Laser Pointer';
+      case ToolType.hand:
+        return 'Pan Canvas';
     }
   }
 }

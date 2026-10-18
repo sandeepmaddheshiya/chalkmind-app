@@ -1,8 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/tool_type.dart';
 import '../state/whiteboard_notifier.dart';
 
-enum CanvasZoomAction { none, zoomIn, zoomOut, reset }
+enum CanvasZoomAction {
+  none,
+  zoomIn,
+  zoomOut,
+  reset,
+  panLeft,
+  panRight,
+  panUp,
+  panDown,
+}
 
 class CanvasZoomActionNotifier extends Notifier<CanvasZoomAction> {
   @override
@@ -123,6 +133,45 @@ class CanvasZoomControls extends ConsumerWidget {
                       : (isDark ? Colors.white60 : Colors.black54),
                 ),
               ),
+            ),
+
+            Container(
+              width: 1,
+              height: 18,
+              color: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+            ),
+
+            // Hand / Pan Tool Toggle Button (Move Infinite Canvas with 1 finger)
+            IconButton(
+              icon: Icon(
+                Icons.pan_tool_rounded,
+                size: 17,
+                color: state.currentTool == ToolType.hand
+                    ? Colors.white
+                    : (isDark ? Colors.white70 : Colors.black87),
+              ),
+              style: IconButton.styleFrom(
+                backgroundColor: state.currentTool == ToolType.hand
+                    ? const Color(0xFF6366F1)
+                    : Colors.transparent,
+                shape: const CircleBorder(),
+              ),
+              tooltip: state.currentTool == ToolType.hand
+                  ? 'Pan Tool Active (Drag canvas with 1 finger)'
+                  : 'Pan Tool (Move canvas with 1 finger)',
+              visualDensity: VisualDensity.compact,
+              onPressed: () {
+                if (state.currentTool == ToolType.hand) {
+                  ref
+                      .read(whiteboardControllerProvider.notifier)
+                      .setTool(ToolType.pen);
+                } else {
+                  ref
+                      .read(whiteboardControllerProvider.notifier)
+                      .setTool(ToolType.hand);
+                }
+              },
             ),
           ],
         ),

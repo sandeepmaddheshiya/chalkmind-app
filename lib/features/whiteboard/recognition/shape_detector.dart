@@ -55,6 +55,11 @@ class ShapeDetector {
 
     // 2. Closed / Near-Closed Shapes
     if (isClosed) {
+      // 2a. Smooth round curve: Definitely Circle / Oval
+      // Checking circle first prevents smooth hand-drawn circles from falsely being simplified into 8-sided octagons!
+      final circleResult = _checkCircle(stroke, points, bounds);
+      if (circleResult != null) return circleResult;
+
       final sharpCorners = _countSharpCorners(points, bounds);
 
       if (sharpCorners >= 3) {
@@ -65,10 +70,6 @@ class ShapeDetector {
         final starResult = _checkStar(stroke, points, bounds);
         if (starResult != null) return starResult;
       } else {
-        // Smooth curve: Definitely Circle / Oval
-        final circleResult = _checkCircle(stroke, points, bounds);
-        if (circleResult != null) return circleResult;
-
         final polyResult = _checkPolygon(stroke, points, bounds);
         if (polyResult != null) return polyResult;
 
@@ -356,11 +357,15 @@ class ShapeDetector {
 
     // 2f. Heptagon (7 vertices)
     if (n == 7 && _isReasonablePolygon(mergedVertices, 7)) {
+      final circleRes = _checkCircle(stroke, points, bounds);
+      if (circleRes != null) return circleRes;
       return _buildHeptagonResult(stroke, bounds, _regularizePolygon(mergedVertices, bounds, 7));
     }
 
     // 2g. Octagon (8 vertices)
     if (n == 8 && _isReasonablePolygon(mergedVertices, 8)) {
+      final circleRes = _checkCircle(stroke, points, bounds);
+      if (circleRes != null) return circleRes;
       return _buildOctagonResult(stroke, bounds, _regularizePolygon(mergedVertices, bounds, 8));
     }
 
@@ -408,6 +413,8 @@ class ShapeDetector {
 
     // 3e. Octagon from 9 vertices
     if (n == 9) {
+      final circleRes = _checkCircle(stroke, points, bounds);
+      if (circleRes != null) return circleRes;
       for (int i = 0; i < 9; i++) {
         final candidate = [for (int j = 0; j < 9; j++) if (j != i) mergedVertices[j]];
         if (_isReasonablePolygon(candidate, 8)) {
@@ -883,18 +890,41 @@ class ShapeDetector {
     List<StrokePoint> points,
     Rect bounds,
   ) {
-    final center = bounds.center;
     final maxDim = math.max(bounds.width, bounds.height);
     if (maxDim < 25.0) return null;
 
     final aspectRatio = bounds.width / bounds.height;
-    if (aspectRatio < 0.45 || aspectRatio > 2.20) return null;
+    if (aspectRatio < 0.35 || aspectRatio > 2.80) return null;
 
-    // A true circle or oval has smooth curvature and NO sharp corners.
-    // Reject immediately if 2 or more sharp corners exist.
+    // A true circle or oval has smooth curvature and NO multiple sharp corners.
     final sharpCornerCount = _countSharpCorners(points, bounds);
     if (sharpCornerCount >= 2) return null;
 
+    final center = bounds.center;
+    final rx = bounds.width / 2;
+    final ry = bounds.height / 2;
+    if (rx < 4.0 || ry < 4.0) return null;
+
+    // 1. Normalized Ellipse Radial Deviation
+    double sumNormDist = 0.0;
+    final normDistances = <double>[];
+    for (final p in points) {
+      final dx = (p.offset.dx - center.dx) / rx;
+      final dy = (p.offset.dy - center.dy) / ry;
+      final nd = math.sqrt(dx * dx + dy * dy);
+      normDistances.add(nd);
+      sumNormDist += nd;
+    }
+    final meanNormDist = sumNormDist / points.length;
+
+    double normVariance = 0.0;
+    for (final nd in normDistances) {
+      normVariance += (nd - meanNormDist) * (nd - meanNormDist);
+    }
+    final normStdDev = math.sqrt(normVariance / points.length);
+    final normCv = normStdDev / meanNormDist;
+
+    // 2. Circular Radial Deviation (for roughly 1:1 circles)
     double sumDist = 0.0;
     final distances = <double>[];
     for (final p in points) {
@@ -909,23 +939,51 @@ class ShapeDetector {
       variance += (d - meanDist) * (d - meanDist);
     }
     final stdDev = math.sqrt(variance / points.length);
-    final cv = stdDev / meanDist;
+    final circCv = stdDev / meanDist;
 
-    if (cv < 0.20) {
+    // 3. Fill ratio (enclosed area / bounds area)
+    final offsets = points.map((p) => p.offset).toList();
+    final area = _calculatePolygonArea(offsets);
+    final boundsArea = bounds.width * bounds.height;
+    final fillRatio = boundsArea > 0 ? (area / boundsArea) : 0.0;
+
+    // Circle or ellipse must have:
+    // - Low normalized radial deviation (normCv < 0.22) or circular CV < 0.22
+    // - Reasonable fill ratio (ellipse ideal is ~0.785, hand-drawn is 0.56 to 0.92)
+    // - Centered distribution (meanNormDist between 0.80 and 1.25)
+    final isGoodCircle = (normCv < 0.22 || circCv < 0.22) &&
+        (fillRatio >= 0.56 && fillRatio <= 0.92) &&
+        (meanNormDist >= 0.80 && meanNormDist <= 1.25);
+
+    if (isGoodCircle) {
+      // If width and height are within 18% of each other, regularize to a perfect geometric circle!
+      Offset shapeStart = bounds.topLeft;
+      Offset shapeEnd = bounds.bottomRight;
+
+      final dimDiff = (bounds.width - bounds.height).abs();
+      if (dimDiff / maxDim < 0.18) {
+        final avgRadius = (bounds.width + bounds.height) / 4;
+        shapeStart = Offset(center.dx - avgRadius, center.dy - avgRadius);
+        shapeEnd = Offset(center.dx + avgRadius, center.dy + avgRadius);
+      }
+
       final shape = ShapeObject(
         id: uuid.v4(),
         shapeType: ShapeType.circle,
-        start: bounds.topLeft,
-        end: bounds.bottomRight,
+        start: shapeStart,
+        end: shapeEnd,
         strokeColorValue: stroke.colorValue,
         strokeWidth: stroke.width,
       );
+
+      final confidenceScore =
+          (1.0 - math.min(normCv, circCv) * 2.2).clamp(0.75, 0.98);
 
       return ShapeDetectionResult(
         shapeType: ShapeType.circle,
         suggestedShape: shape,
         originalStroke: stroke,
-        confidence: (1.0 - cv * 2.5).clamp(0.70, 0.98),
+        confidence: confidenceScore,
       );
     }
     return null;
@@ -977,9 +1035,10 @@ class ShapeDetector {
       final dot = (vIn.dx * vOut.dx + vIn.dy * vOut.dy) / (vIn.distance * vOut.distance);
       final turnAngle = math.acos(dot.clamp(-1.0, 1.0));
 
-      // Turn angles between 35° and 150° (0.60 to 2.65 rad)
-      // Supports Octagon (45°), Heptagon (51°), Hexagon (60°), Pentagon (72°), Square (90°), Triangle (120°)
-      if (turnAngle >= 0.60 && turnAngle <= 2.65) {
+      // Turn angles between 53° and 150° (0.92 to 2.65 rad)
+      // Supports Hexagon (60°), Pentagon (72°), Square/Rectangle (90°), Triangle (120°)
+      // Notice: Smooth circle turning angles are <= 44° (0.76 rad), preventing circle from registering fake sharp corners!
+      if (turnAngle >= 0.92 && turnAngle <= 2.65) {
         if (i - lastCornerIdx >= step) {
           sharpCorners++;
           lastCornerIdx = i;

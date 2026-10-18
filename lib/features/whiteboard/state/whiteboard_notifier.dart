@@ -649,6 +649,44 @@ class WhiteboardNotifier extends Notifier<WhiteboardState> {
     _recoveryService.scheduleRecoverySave(updatedProject);
   }
 
+  void deletePage(int index) {
+    if (state.project.pages.length <= 1) {
+      clearCurrentPage();
+      return;
+    }
+    if (index < 0 || index >= state.project.pages.length) return;
+
+    final updatedPages = List<PageModel>.from(state.project.pages)
+      ..removeAt(index);
+
+    final reindexed = [
+      for (int i = 0; i < updatedPages.length; i++)
+        updatedPages[i].copyWith(pageNumber: i + 1)
+    ];
+
+    int newIndex = state.project.currentPageIndex;
+    if (index < newIndex) {
+      newIndex--;
+    } else if (newIndex >= reindexed.length) {
+      newIndex = reindexed.length - 1;
+    }
+
+    final updatedProject = state.project.copyWith(
+      pages: reindexed,
+      currentPageIndex: newIndex,
+      updatedAt: DateTime.now(),
+    );
+
+    _historyManager.clear();
+    state = state.copyWith(
+      project: updatedProject,
+      canUndo: false,
+      canRedo: false,
+      selectedObjectIds: {},
+    );
+    _recoveryService.scheduleRecoverySave(updatedProject);
+  }
+
   void selectPage(int index) {
     if (index < 0 || index >= state.project.pages.length) return;
     if (index == state.project.currentPageIndex) return;

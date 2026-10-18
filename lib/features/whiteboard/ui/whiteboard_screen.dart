@@ -12,6 +12,7 @@ import 'selection_action_overlay.dart';
 import 'shape_suggestion_overlay.dart';
 import 'tool_properties_panel.dart';
 import 'toolbar_widget.dart';
+import 'unified_bottom_bar.dart';
 
 class WhiteboardScreen extends ConsumerStatefulWidget {
   const WhiteboardScreen({super.key});
@@ -22,10 +23,26 @@ class WhiteboardScreen extends ConsumerStatefulWidget {
 
 class _WhiteboardScreenState extends ConsumerState<WhiteboardScreen> {
   bool _isPropertiesOpen = false;
+  bool _isToolbarVisible = true;
+  Offset? _toolbarPosition;
 
   void _toggleProperties() {
     setState(() {
       _isPropertiesOpen = !_isPropertiesOpen;
+    });
+  }
+
+  void _onToolbarDragUpdate(DragUpdateDetails details) {
+    final screenSize = MediaQuery.of(context).size;
+    final topPadding = MediaQuery.of(context).padding.top;
+    setState(() {
+      final cur =
+          _toolbarPosition ?? Offset(screenSize.width - 68, topPadding + 16);
+      _toolbarPosition = Offset(
+        (cur.dx + details.delta.dx).clamp(10.0, screenSize.width - 68),
+        (cur.dy + details.delta.dy)
+            .clamp(topPadding + 10, screenSize.height - 420),
+      );
     });
   }
 
@@ -208,6 +225,24 @@ class _WhiteboardScreenState extends ConsumerState<WhiteboardScreen> {
             },
           ),
 
+          // Toggle Toolbar Show/Hide
+          IconButton(
+            icon: Icon(
+              _isToolbarVisible
+                  ? Icons.view_sidebar_rounded
+                  : Icons.view_sidebar_outlined,
+              color: _isToolbarVisible
+                  ? Theme.of(context).colorScheme.primary
+                  : null,
+            ),
+            tooltip: _isToolbarVisible ? 'Hide Toolbar' : 'Show Toolbar',
+            onPressed: () {
+              setState(() {
+                _isToolbarVisible = !_isToolbarVisible;
+              });
+            },
+          ),
+
           // Background & Properties Toggle
           IconButton(
             icon: Icon(
@@ -223,75 +258,129 @@ class _WhiteboardScreenState extends ConsumerState<WhiteboardScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: Stack(
-        children: [
-          // Canvas fills 100% of workspace
-          const Positioned.fill(
-            child: WhiteboardCanvas(),
-          ),
+      body: Builder(
+        builder: (context) {
+          final screenSize = MediaQuery.of(context).size;
+          final topPadding = MediaQuery.of(context).padding.top;
+          final isDark = Theme.of(context).brightness == Brightness.dark;
 
-          // Shape Suggestion Floating Overlay (e.g. "Convert to Circle? [Convert] [Keep]")
-          const Positioned(
-            top: 14,
-            left: 0,
-            right: 0,
-            child: ShapeSuggestionOverlay(),
-          ),
+          // Initialize default toolbar position
+          _toolbarPosition ??= Offset(
+            state.isLeftHanded ? 16 : (screenSize.width - 68),
+            topPadding + 16,
+          );
 
-          // Handwritten Math Calculation Floating Overlay (e.g. "2 + 2 = 4 [Write 4 in Ink]")
-          const Positioned(
-            top: 14,
-            left: 0,
-            right: 0,
-            child: MathSuggestionOverlay(),
-          ),
+          return Stack(
+            children: [
+              // Canvas fills 100% of workspace
+              const Positioned.fill(
+                child: WhiteboardCanvas(),
+              ),
 
-          // Floating Toolbar (Left or Right depending on left-handed setting)
-          Positioned(
-            top: 16,
-            left: state.isLeftHanded ? 16 : null,
-            right: state.isLeftHanded ? null : 16,
-            child: WhiteboardToolbar(
-              isPropertiesOpen: _isPropertiesOpen,
-              onToggleProperties: _toggleProperties,
-            ),
-          ),
+              // Shape Suggestion Floating Overlay
+              const Positioned(
+                top: 14,
+                left: 0,
+                right: 0,
+                child: ShapeSuggestionOverlay(),
+              ),
 
-          // Floating Properties Panel (Placed next to toolbar when open)
-          if (_isPropertiesOpen)
-            Positioned(
-              top: 16,
-              left: state.isLeftHanded ? 80 : null,
-              right: state.isLeftHanded ? null : 80,
-              child: const ToolPropertiesPanel(),
-            ),
+              // Handwritten Math Calculation Floating Overlay
+              const Positioned(
+                top: 14,
+                left: 0,
+                right: 0,
+                child: MathSuggestionOverlay(),
+              ),
 
-          // Floating Selection Action Bar (Solve Selected, Delete, Clear)
-          Positioned(
-            bottom: MediaQuery.of(context).padding.bottom + 76,
-            left: 0,
-            right: 0,
-            child: const SelectionActionOverlay(),
-          ),
+              // Floating Draggable Toolbar
+              if (_isToolbarVisible)
+                Positioned(
+                  left: _toolbarPosition!.dx,
+                  top: _toolbarPosition!.dy,
+                  child: WhiteboardToolbar(
+                    isPropertiesOpen: _isPropertiesOpen,
+                    onToggleProperties: _toggleProperties,
+                    onHideToolbar: () =>
+                        setState(() => _isToolbarVisible = false),
+                    onPanUpdate: _onToolbarDragUpdate,
+                  ),
+                ),
 
-          // Bottom Floating Canvas Zoom & Pan Controls
-          Positioned(
-            bottom: MediaQuery.of(context).padding.bottom + 16,
-            left: state.isLeftHanded ? null : 16,
-            right: state.isLeftHanded ? 16 : null,
-            child: const CanvasZoomControls(),
-          ),
+              // Minimized Floating Trigger Button to restore Toolbar when hidden
+              if (!_isToolbarVisible)
+                Positioned(
+                  top: _toolbarPosition!.dy,
+                  left: _toolbarPosition!.dx <= screenSize.width / 2
+                      ? 12
+                      : null,
+                  right: _toolbarPosition!.dx > screenSize.width / 2
+                      ? 12
+                      : null,
+                  child: Material(
+                    elevation: 8,
+                    borderRadius: BorderRadius.circular(24),
+                    color: isDark ? const Color(0xFF1F2937) : Colors.white,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(24),
+                      onTap: () => setState(() => _isToolbarVisible = true),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(
+                            color: isDark
+                                ? Colors.grey.shade800
+                                : Colors.grey.shade200,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.brush_rounded,
+                              size: 18,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                            const SizedBox(width: 4),
+                            const Text(
+                              'Tools',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
 
-          // Bottom Floating Page Strip & Navigation
-          Positioned(
-            bottom: MediaQuery.of(context).padding.bottom + 16,
-            left: 0,
-            right: 0,
-            child: const Center(
-              child: PageStripWidget(),
-            ),
-          ),
-        ],
+              // Floating Properties Panel (Positioned adjacent to Draggable Toolbar)
+              if (_isPropertiesOpen && _isToolbarVisible)
+                Positioned(
+                  top: _toolbarPosition!.dy.clamp(16.0, screenSize.height - 400),
+                  left: _toolbarPosition!.dx <= screenSize.width / 2
+                      ? (_toolbarPosition!.dx + 64)
+                      : null,
+                  right: _toolbarPosition!.dx > screenSize.width / 2
+                      ? (screenSize.width - _toolbarPosition!.dx + 8)
+                      : null,
+                  child: const ToolPropertiesPanel(),
+                ),
+
+              // Bottom Floating Unified Whiteboard Controls (Single slim bar)
+              Positioned(
+                bottom: MediaQuery.of(context).padding.bottom + 16,
+                left: 16,
+                right: 16,
+                child: const UnifiedBottomBar(),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

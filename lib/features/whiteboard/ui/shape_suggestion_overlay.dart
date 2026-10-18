@@ -52,78 +52,87 @@ class ShapeSuggestionOverlay extends ConsumerWidget {
     }
 
     return Center(
-      child: Material(
-        elevation: 8,
-        borderRadius: BorderRadius.circular(30),
-        color: isDark ? const Color(0xFF1E222B) : Colors.white,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(30),
-            border: Border.all(
-              color: isDark ? const Color(0xFF374151) : const Color(0xFFE5E7EB),
-              width: 1.2,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width - 32,
+        ),
+        child: Material(
+          elevation: 8,
+          borderRadius: BorderRadius.circular(30),
+          color: isDark ? const Color(0xFF1E222B) : Colors.white,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(
+                color: isDark ? const Color(0xFF374151) : const Color(0xFFE5E7EB),
+                width: 1.2,
+              ),
             ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  shapeIcon,
-                  size: 18,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                'Convert to $shapeName?',
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.2,
-                ),
-              ),
-              const SizedBox(width: 14),
-
-              // Accept Button
-              FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  minimumSize: const Size(0, 34),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      shapeIcon,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                   ),
-                ),
-                icon: const Icon(Icons.check_rounded, size: 16),
-                label: const Text('Convert', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                onPressed: () {
-                  ref.read(whiteboardControllerProvider.notifier).acceptShapeSuggestion();
-                },
-              ),
-
-              const SizedBox(width: 8),
-
-              // Dismiss / Keep Hand-Drawn Button
-              OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  minimumSize: const Size(0, 34),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Convert to $shapeName?',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.2,
+                    ),
                   ),
-                ),
-                child: const Text('Keep Hand-Drawn', style: TextStyle(fontSize: 12)),
-                onPressed: () {
-                  ref.read(whiteboardControllerProvider.notifier).dismissShapeSuggestion();
-                },
+                  const SizedBox(width: 14),
+
+                  // Accept Button
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      minimumSize: const Size(0, 34),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                    icon: const Icon(Icons.check_rounded, size: 16),
+                    label: const Text('Convert', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    onPressed: () {
+                      ref.read(whiteboardControllerProvider.notifier).acceptShapeSuggestion();
+                    },
+                  ),
+
+                  const SizedBox(width: 8),
+
+                  // Dismiss / Keep Hand-Drawn Button
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      minimumSize: const Size(0, 34),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                    child: const Text('Keep Hand-Drawn', style: TextStyle(fontSize: 12)),
+                    onPressed: () {
+                      ref.read(whiteboardControllerProvider.notifier).dismissShapeSuggestion();
+                    },
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),

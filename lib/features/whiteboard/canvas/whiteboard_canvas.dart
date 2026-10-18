@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -36,7 +37,15 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
   Offset? _dragStart;
   bool _isMovingSelected = false;
 
-  final Set<int> _activePointers = {};
+  // Robust pointer & palm rejection tracking
+  int? _drawingPointerId;
+  bool _isDrawingWithStylus = false;
+  DateTime? _drawingStartTime;
+  final Map<int, Offset> _activePointers = {};
+  Offset? _handPanLastPos;
+  bool _twoFingerActive = false;
+  double? _lastPinchDistance;
+  Offset? _lastTwoFingerMidpoint;
 
   @override
   void initState() {
@@ -55,28 +64,56 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
     );
   }
 
-  void _zoomBy(double factor) {
+  void _panBy(Offset screenDelta) {
+    final matrix = _transformController.value.clone();
+    final currentTx = matrix.entry(0, 3);
+    final currentTy = matrix.entry(1, 3);
+    matrix.setEntry(0, 3, currentTx + screenDelta.dx);
+    matrix.setEntry(1, 3, currentTy + screenDelta.dy);
+    _transformController.value = matrix;
+  }
+
+  void _zoomAround(Offset focalPoint, double factor, {required bool isInfinite}) {
     final matrix = _transformController.value.clone();
     final currentScale = matrix.getMaxScaleOnAxis();
-    final isInfinite = ref.read(whiteboardControllerProvider).isInfiniteCanvas;
-    final minScale = isInfinite ? 0.1 : 0.4;
+    final minScale = isInfinite ? 0.10 : 0.40;
     final maxScale = isInfinite ? 6.0 : 3.5;
     final targetScale = (currentScale * factor).clamp(minScale, maxScale);
-    final actualFactor = targetScale / currentScale;
+    final actualRatio = targetScale / currentScale;
 
+    final currentTx = matrix.entry(0, 3);
+    final currentTy = matrix.entry(1, 3);
+
+    final newTx = focalPoint.dx - (focalPoint.dx - currentTx) * actualRatio;
+    final newTy = focalPoint.dy - (focalPoint.dy - currentTy) * actualRatio;
+
+    matrix.scale(actualRatio);
+    matrix.setEntry(0, 3, newTx);
+    matrix.setEntry(1, 3, newTy);
+    _transformController.value = matrix;
+  }
+
+  void _zoomBy(double factor) {
     final renderBox = context.findRenderObject() as RenderBox?;
     final center = renderBox != null
         ? renderBox.size.center(Offset.zero)
         : const Offset(400, 600);
-
-    matrix.translate(center.dx, center.dy);
-    matrix.scale(actualFactor);
-    matrix.translate(-center.dx, -center.dy);
-    _transformController.value = matrix;
+    final isInfinite = ref.read(whiteboardControllerProvider).isInfiniteCanvas;
+    _zoomAround(center, factor, isInfinite: isInfinite);
   }
 
   void _resetTransform() {
     _transformController.value = Matrix4.identity();
+  }
+
+  Offset _toCanvasPoint(Offset screenPoint) {
+    try {
+      return _transformController.toScene(screenPoint);
+    } catch (_) {
+      final matrix = _transformController.value;
+      final inverse = Matrix4.inverted(matrix);
+      return MatrixUtils.transformPoint(inverse, screenPoint);
+    }
   }
 
   @override
@@ -84,10 +121,6 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
     _transformController.removeListener(_onTransformChanged);
     _transformController.dispose();
     super.dispose();
-  }
-
-  Offset _screenToCanvas(Offset screenOffset) {
-    return _transformController.toScene(screenOffset);
   }
 
   @override
@@ -106,6 +139,18 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
         ref.read(canvasZoomActionProvider.notifier).reset();
       } else if (next == CanvasZoomAction.reset) {
         _resetTransform();
+        ref.read(canvasZoomActionProvider.notifier).reset();
+      } else if (next == CanvasZoomAction.panLeft) {
+        _panBy(const Offset(300, 0));
+        ref.read(canvasZoomActionProvider.notifier).reset();
+      } else if (next == CanvasZoomAction.panRight) {
+        _panBy(const Offset(-300, 0));
+        ref.read(canvasZoomActionProvider.notifier).reset();
+      } else if (next == CanvasZoomAction.panUp) {
+        _panBy(const Offset(0, 300));
+        ref.read(canvasZoomActionProvider.notifier).reset();
+      } else if (next == CanvasZoomAction.panDown) {
+        _panBy(const Offset(0, -300));
         ref.read(canvasZoomActionProvider.notifier).reset();
       }
     });
@@ -137,8 +182,6 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
       }
     }
 
-    final isTwoFinger = _activePointers.length >= 2;
-
     return Stack(
       children: [
         // Layer 0: Seamless Full-Screen Background Surface (Infinite Canvas or Paginated Desk + Sheet)
@@ -157,23 +200,32 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
           ),
         ),
 
-        // Layer 1: Interactive Canvas Content & Stylus Gestures
+        // Layer 1: Interactive Canvas Content & Full-Screen Touch Surface (Zero Dead Zones)
         Positioned.fill(
-          child: InteractiveViewer(
-            transformationController: _transformController,
-            boundaryMargin: isInfinite
-                ? const EdgeInsets.all(50000)
-                : const EdgeInsets.symmetric(horizontal: 1000, vertical: 1200),
-            minScale: isInfinite ? 0.10 : 0.40,
-            maxScale: isInfinite ? 6.0 : 3.5,
-            panEnabled: isTwoFinger,
-            scaleEnabled: isTwoFinger,
-            child: Listener(
-              behavior: HitTestBehavior.opaque,
-              onPointerDown: (event) {
-                _activePointers.add(event.pointer);
+          child: Listener(
+            behavior: HitTestBehavior.opaque,
+            onPointerDown: (event) {
+              final isStylus = event.kind == PointerDeviceKind.stylus ||
+                  event.kind == PointerDeviceKind.invertedStylus;
+
+              _activePointers[event.pointer] = event.position;
+
+              // Hand / Pan Tool: Moving the infinite canvas
+              if (state.currentTool == ToolType.hand) {
                 if (_activePointers.length >= 2) {
-                  // Cancel drawing if second finger lands
+                  final points = _activePointers.values.toList();
+                  _lastTwoFingerMidpoint = (points[0] + points[1]) / 2;
+                  _lastPinchDistance = (points[0] - points[1]).distance;
+                  _twoFingerActive = true;
+                } else {
+                  _handPanLastPos = event.position;
+                }
+                return;
+              }
+
+              // Stylus takes absolute priority for drawing with 100% palm rejection
+              if (isStylus) {
+                if (_drawingPointerId != null && !_isDrawingWithStylus) {
                   setState(() {
                     _activePoints.clear();
                     _shapeStart = null;
@@ -182,86 +234,257 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
                     _laserPoint = null;
                     _selectionMarquee = null;
                   });
+                }
+                _drawingPointerId = event.pointer;
+                _isDrawingWithStylus = true;
+                _drawingStartTime = DateTime.now();
+                final canvasPoint = _toCanvasPoint(event.localPosition);
+                _handlePointerDown(canvasPoint, event, selectedBounds);
+                return;
+              }
+
+              // If currently drawing with stylus, ignore all touch inputs (palm rejection)
+              if (_isDrawingWithStylus) {
+                return;
+              }
+
+              // Touch drawing & multi-touch handling
+              if (_drawingPointerId == null) {
+                if (_activePointers.length >= 2) {
+                  // Two or more fingers touched down: Start 2-finger pan & pinch zoom
+                  final points = _activePointers.values.toList();
+                  _lastTwoFingerMidpoint = (points[0] + points[1]) / 2;
+                  _lastPinchDistance = (points[0] - points[1]).distance;
+                  _twoFingerActive = true;
                   return;
                 }
-
-                final canvasPoint = _screenToCanvas(event.localPosition);
+                // Single finger touched down: Start drawing
+                _drawingPointerId = event.pointer;
+                _drawingStartTime = DateTime.now();
+                final canvasPoint = _toCanvasPoint(event.localPosition);
                 _handlePointerDown(canvasPoint, event, selectedBounds);
-              },
-              onPointerMove: (event) {
-                if (_activePointers.length >= 2) return;
-                final canvasPoint = _screenToCanvas(event.localPosition);
+              } else {
+                // Another contact occurred while already drawing
+                // Check if this was a simultaneous 2-finger tap/gesture (< 120ms and <= 2 points)
+                final elapsed = _drawingStartTime != null
+                    ? DateTime.now()
+                        .difference(_drawingStartTime!)
+                        .inMilliseconds
+                    : 999;
+                if (elapsed < 120 && _activePoints.length <= 2) {
+                  // User intended a 2-finger pan/zoom gesture
+                  _drawingPointerId = null;
+                  setState(() {
+                    _activePoints.clear();
+                    _shapeStart = null;
+                    _shapeEnd = null;
+                    _eraserPoint = null;
+                    _laserPoint = null;
+                    _selectionMarquee = null;
+                  });
+                  final points = _activePointers.values.toList();
+                  if (points.length >= 2) {
+                    _lastTwoFingerMidpoint = (points[0] + points[1]) / 2;
+                    _lastPinchDistance = (points[0] - points[1]).distance;
+                    _twoFingerActive = true;
+                  }
+                } else {
+                  // Stroke is already well underway: ignore secondary touch (palm contact)
+                  // Do NOT cancel the in-progress stroke!
+                }
+              }
+            },
+            onPointerMove: (event) {
+              _activePointers[event.pointer] = event.position;
+
+              // If drawing with stylus, ignore non-stylus pointer moves
+              if (_isDrawingWithStylus && event.pointer != _drawingPointerId) {
+                return;
+              }
+
+              // 2-finger pan & pinch zoom (when active)
+              if (_twoFingerActive && _activePointers.length >= 2) {
+                final points = _activePointers.values.toList();
+                final mid = (points[0] + points[1]) / 2;
+                final dist = (points[0] - points[1]).distance;
+
+                // Pan by midpoint movement
+                if (_lastTwoFingerMidpoint != null) {
+                  final delta = mid - _lastTwoFingerMidpoint!;
+                  _panBy(delta);
+                }
+                _lastTwoFingerMidpoint = mid;
+
+                // Pinch zoom around midpoint
+                if (_lastPinchDistance != null &&
+                    _lastPinchDistance! > 10 &&
+                    dist > 10) {
+                  final scaleDelta = dist / _lastPinchDistance!;
+                  _zoomAround(mid, scaleDelta, isInfinite: isInfinite);
+                }
+                _lastPinchDistance = dist;
+                return;
+              }
+
+              // Hand / Pan Tool: 1-finger drag to move canvas
+              if (state.currentTool == ToolType.hand) {
+                if (_handPanLastPos != null) {
+                  final delta = event.position - _handPanLastPos!;
+                  _panBy(delta);
+                  _handPanLastPos = event.position;
+                }
+                return;
+              }
+
+              // Primary drawing pointer movement
+              if (event.pointer == _drawingPointerId) {
+                final canvasPoint = _toCanvasPoint(event.localPosition);
                 _handlePointerMove(canvasPoint, event);
-              },
-              onPointerUp: (event) {
-                _activePointers.remove(event.pointer);
-                if (_activePointers.isNotEmpty) return;
-                final canvasPoint = _screenToCanvas(event.localPosition);
+              }
+            },
+            onPointerUp: (event) {
+              _activePointers.remove(event.pointer);
+
+              if (_activePointers.length < 2) {
+                _twoFingerActive = false;
+                _lastTwoFingerMidpoint = null;
+                _lastPinchDistance = null;
+              }
+
+              if (state.currentTool == ToolType.hand) {
+                if (_activePointers.isEmpty) {
+                  _handPanLastPos = null;
+                }
+                return;
+              }
+
+              if (event.pointer == _drawingPointerId) {
+                final canvasPoint = _toCanvasPoint(event.localPosition);
                 _handlePointerUp(canvasPoint);
-              },
-              onPointerCancel: (event) {
-                _activePointers.remove(event.pointer);
-                setState(() {
-                  _activePoints.clear();
-                  _shapeStart = null;
-                  _shapeEnd = null;
-                  _eraserPoint = null;
-                  _laserPoint = null;
-                  _selectionMarquee = null;
-                });
-              },
-              child: Stack(
-                children: [
-                  // Layer 1: Committed Board Content (Strokes, Shapes, Texts)
-                  Positioned.fill(
-                    child: RepaintBoundary(
-                      child: CustomPaint(
-                        painter: BoardPainter(
-                    strokes: currentPage.strokes,
-                    shapes: currentPage.shapes,
-                    texts: currentPage.texts,
-                    selectedIds: state.selectedObjectIds,
-                  ),
-                ),
-              ),
-            ),
+                _drawingPointerId = null;
+                _isDrawingWithStylus = false;
+              }
 
-            // Layer 3: Selection Bounding Box & Marquee
-            if (state.currentTool == ToolType.select)
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: SelectionPainter(
-                    selectionMarquee: _selectionMarquee,
-                    boundingBox: selectedBounds,
-                    isDragging: _isMovingSelected,
-                  ),
-                ),
-              ),
+              if (_activePointers.isEmpty) {
+                _handPanLastPos = null;
+                _twoFingerActive = false;
+                _drawingPointerId = null;
+                _isDrawingWithStylus = false;
+              }
+            },
+            onPointerCancel: (event) {
+              _activePointers.remove(event.pointer);
 
-            // Layer 4: Active Stroke / Gesture in progress
-            Positioned.fill(
-              child: CustomPaint(
-                painter: ActiveStrokePainter(
-                  activePoints: _activePoints.isNotEmpty ? _activePoints : null,
-                  toolType: state.currentTool,
-                  color: state.selectedColor,
-                  width: state.selectedStrokeWidth,
-                  opacity: state.currentTool == ToolType.highlighter
-                      ? 0.35
-                      : (state.currentTool == ToolType.pencil ? 0.7 : 1.0),
-                  activeShapeType: state.currentTool == ToolType.shape
-                      ? state.selectedShapeType
-                      : null,
-                  shapeStart: _shapeStart,
-                  shapeEnd: _shapeEnd,
-                  isShapeFilled: state.isShapeFilled,
-                  eraserPosition: _eraserPoint,
-                  laserPosition: _laserPoint,
-                ),
-              ),
-            ),
-                ],
-              ),
+              if (_activePointers.length < 2) {
+                _twoFingerActive = false;
+                _lastTwoFingerMidpoint = null;
+                _lastPinchDistance = null;
+              }
+
+              if (state.currentTool == ToolType.hand) {
+                if (_activePointers.isEmpty) {
+                  _handPanLastPos = null;
+                }
+                return;
+              }
+
+              if (event.pointer == _drawingPointerId) {
+                // Commit completed stroke if substantial points were drawn
+                if (_activePoints.length >= 2 &&
+                    state.currentTool.isDrawingTool) {
+                  final canvasPoint = _toCanvasPoint(event.localPosition);
+                  _handlePointerUp(canvasPoint);
+                } else {
+                  setState(() {
+                    _activePoints.clear();
+                    _shapeStart = null;
+                    _shapeEnd = null;
+                    _eraserPoint = null;
+                    _laserPoint = null;
+                    _selectionMarquee = null;
+                  });
+                }
+                _drawingPointerId = null;
+                _isDrawingWithStylus = false;
+              }
+
+              if (_activePointers.isEmpty) {
+                _handPanLastPos = null;
+                _twoFingerActive = false;
+                _drawingPointerId = null;
+                _isDrawingWithStylus = false;
+              }
+            },
+            child: AnimatedBuilder(
+              animation: _transformController,
+              builder: (context, _) {
+                return ClipRect(
+                  child: Transform(
+                    transform: _transformController.value,
+                    alignment: Alignment.topLeft,
+                    child: SizedBox.expand(
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          // Layer 1: Committed Board Content (Strokes, Shapes, Texts)
+                          Positioned.fill(
+                            child: RepaintBoundary(
+                              child: CustomPaint(
+                                painter: BoardPainter(
+                                  strokes: currentPage.strokes,
+                                  shapes: currentPage.shapes,
+                                  texts: currentPage.texts,
+                                  selectedIds: state.selectedObjectIds,
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          // Layer 3: Selection Bounding Box & Marquee
+                          if (state.currentTool == ToolType.select)
+                            Positioned.fill(
+                              child: CustomPaint(
+                                painter: SelectionPainter(
+                                  selectionMarquee: _selectionMarquee,
+                                  boundingBox: selectedBounds,
+                                  isDragging: _isMovingSelected,
+                                ),
+                              ),
+                            ),
+
+                          // Layer 4: Active Stroke / Gesture in progress
+                          Positioned.fill(
+                            child: CustomPaint(
+                              painter: ActiveStrokePainter(
+                                activePoints: _activePoints.isNotEmpty
+                                    ? _activePoints
+                                    : null,
+                                toolType: state.currentTool,
+                                color: state.selectedColor,
+                                width: state.selectedStrokeWidth,
+                                opacity: state.currentTool == ToolType.highlighter
+                                    ? 0.35
+                                    : (state.currentTool == ToolType.pencil
+                                        ? 0.7
+                                        : 1.0),
+                                activeShapeType:
+                                    state.currentTool == ToolType.shape
+                                        ? state.selectedShapeType
+                                        : null,
+                                shapeStart: _shapeStart,
+                                shapeEnd: _shapeEnd,
+                                isShapeFilled: state.isShapeFilled,
+                                eraserPosition: _eraserPoint,
+                                laserPosition: _laserPoint,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ),
