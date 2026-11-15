@@ -96,7 +96,7 @@ class OpenRouterClient {
   Map<String, String> _headers() => {
     'Authorization': 'Bearer ${config.apiKey}',
     'Content-Type': 'application/json',
-    'X-Title': 'BoardFlow Whiteboard',
+    'X-Title': 'Chalkwise',
   };
 
   static bool _isRetryableStatus(int code) =>

@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../canvas/whiteboard_canvas.dart';
 import '../models/tool_type.dart';
 import 'ai_assistant_panel.dart';
+import '../../onboarding/coach_marks.dart';
+import '../../onboarding/onboarding_prefs.dart';
 import 'canvas_zoom_controls.dart';
 import '../state/whiteboard_notifier.dart';
 import 'ai_recognition_settings_dialog.dart';
@@ -24,6 +26,138 @@ class WhiteboardScreen extends ConsumerStatefulWidget {
 }
 
 class _WhiteboardScreenState extends ConsumerState<WhiteboardScreen> {
+  // Targets for the step-by-step tutorial spotlight.
+  final _toolbarKey = GlobalKey(debugLabel: 'tour-toolbar');
+  final _undoRedoKey = GlobalKey(debugLabel: 'tour-undo');
+  final _aiKey = GlobalKey(debugLabel: 'tour-ai');
+  final _moreKey = GlobalKey(debugLabel: 'tour-more');
+  final _bottomBarKey = GlobalKey(debugLabel: 'tour-bottom');
+  final _toolKeys = <ToolType, GlobalKey>{
+    ToolType.pen: GlobalKey(debugLabel: 'tour-pen'),
+    ToolType.highlighter: GlobalKey(debugLabel: 'tour-highlighter'),
+    ToolType.strokeEraser: GlobalKey(debugLabel: 'tour-eraser'),
+    ToolType.shape: GlobalKey(debugLabel: 'tour-shapes'),
+    ToolType.select: GlobalKey(debugLabel: 'tour-select'),
+  };
+  bool _tourRunning = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // First board visit: offer the step-by-step tutorial once.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (await OnboardingPrefs.isTutorialDone() || !mounted) return;
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      if (mounted) _startTour();
+    });
+  }
+
+  List<CoachStep> _tourSteps() {
+    final compact = MediaQuery.sizeOf(context).width < 760;
+    return [
+      const CoachStep(
+        icon: Icons.waving_hand_rounded,
+        title: 'Quick tour',
+        body:
+            'A 1-minute walk through the board. You can replay it any time from the menu.',
+      ),
+      CoachStep(
+        target: _toolbarKey,
+        icon: Icons.construction_rounded,
+        title: 'Your toolbar',
+        body:
+            'All drawing tools live here. Drag the dots at the top to move it, or hide it from the menu.',
+      ),
+      CoachStep(
+        target: _toolKeys[ToolType.pen],
+        icon: Icons.edit_rounded,
+        title: 'Write and draw',
+        body:
+            'Pen, pencil and marker. Tap the round colour button above to change colour and thickness.',
+      ),
+      CoachStep(
+        target: _toolKeys[ToolType.highlighter],
+        icon: Icons.border_color_rounded,
+        title: 'Highlighter',
+        body:
+            'Mark important parts. On an imported PDF, highlight a word to see its meaning.',
+      ),
+      CoachStep(
+        target: _toolKeys[ToolType.strokeEraser],
+        icon: Icons.auto_fix_normal_rounded,
+        title: 'Eraser',
+        body:
+            'Swipe to erase whole strokes. Tap the eraser again to erase only the part you touch.',
+      ),
+      CoachStep(
+        target: _toolKeys[ToolType.shape],
+        icon: Icons.category_rounded,
+        title: 'Shapes',
+        body:
+            'Draw perfect shapes. Even with the pen, rough circles and boxes offer to snap into neat ones.',
+      ),
+      CoachStep(
+        target: _toolKeys[ToolType.select],
+        icon: Icons.highlight_alt_rounded,
+        title: 'Select',
+        body:
+            'Circle anything to move, copy or delete it, or tap "Solve" to have the selection worked out.',
+      ),
+      CoachStep(
+        target: _undoRedoKey,
+        icon: Icons.undo_rounded,
+        title: 'Undo & redo',
+        body: 'Every page keeps its own history, so you can always step back.',
+      ),
+      CoachStep(
+        target: _aiKey,
+        icon: Icons.psychology_alt_rounded,
+        title: 'AI Assistant',
+        body:
+            'Explain, give hints, check working, make quizzes or draw flowcharts from what is on the board.',
+      ),
+      CoachStep(
+        target: _moreKey,
+        icon: Icons.more_horiz_rounded,
+        title: 'More actions',
+        body: compact
+            ? 'Import PDF pages, export or share, smart recognition settings, and replay this tour.'
+            : 'Import PDF pages, export or share, smart recognition settings, canvas mode and colours.',
+      ),
+      CoachStep(
+        target: _bottomBarKey,
+        icon: Icons.layers_outlined,
+        title: 'Pages & zoom',
+        body:
+            'Add and switch pages, zoom in and out, or fit everything on screen. Pinch to zoom works too.',
+      ),
+      const CoachStep(
+        icon: Icons.functions_rounded,
+        title: 'Try it now',
+        body:
+            'Write 2 + 3 = with the pen. Chalkwise will offer the answer in your handwriting.',
+      ),
+    ];
+  }
+
+  Future<void> _startTour() async {
+    if (_tourRunning) return;
+    _tourRunning = true;
+    // Make sure the targets are visible.
+    if (!_isToolbarVisible || _isAssistantOpen) {
+      setState(() {
+        _isToolbarVisible = true;
+        _isAssistantOpen = false;
+      });
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    if (!mounted) return;
+    await CoachMarkTour.show(context, _tourSteps());
+    _tourRunning = false;
+    await OnboardingPrefs.markTutorialDone();
+    if (mounted) _boardFocus.requestFocus();
+  }
+
   final FocusNode _boardFocus = FocusNode(debugLabel: 'whiteboard');
   bool _isAssistantOpen = false;
   ToolType? _toolBeforeSpacePan;
@@ -229,6 +363,11 @@ class _WhiteboardScreenState extends ConsumerState<WhiteboardScreen> {
     final primary = Theme.of(context).colorScheme.primary;
     return [
       (
+        icon: const Icon(Icons.school_outlined),
+        label: 'Show tutorial',
+        onTap: _startTour,
+      ),
+      (
         icon: const Icon(Icons.picture_as_pdf_outlined),
         label: 'Import PDF pages',
         onTap: _importPdfPages,
@@ -425,24 +564,32 @@ class _WhiteboardScreenState extends ConsumerState<WhiteboardScreen> {
               ),
             ),
             actions: [
-              // Undo Button
-              IconButton(
-                icon: const Icon(Icons.undo_rounded),
-                tooltip: 'Undo (Ctrl+Z)',
-                onPressed: state.canUndo
-                    ? () =>
-                          ref.read(whiteboardControllerProvider.notifier).undo()
-                    : null,
-              ),
+              // Undo / Redo (grouped so the tutorial can point at both)
+              Row(
+                key: _undoRedoKey,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.undo_rounded),
+                    tooltip: 'Undo (Ctrl+Z)',
+                    onPressed: state.canUndo
+                        ? () => ref
+                              .read(whiteboardControllerProvider.notifier)
+                              .undo()
+                        : null,
+                  ),
 
-              // Redo Button
-              IconButton(
-                icon: const Icon(Icons.redo_rounded),
-                tooltip: 'Redo (Ctrl+Shift+Z)',
-                onPressed: state.canRedo
-                    ? () =>
-                          ref.read(whiteboardControllerProvider.notifier).redo()
-                    : null,
+                  // Redo Button
+                  IconButton(
+                    icon: const Icon(Icons.redo_rounded),
+                    tooltip: 'Redo (Ctrl+Shift+Z)',
+                    onPressed: state.canRedo
+                        ? () => ref
+                              .read(whiteboardControllerProvider.notifier)
+                              .redo()
+                        : null,
+                  ),
+                ],
               ),
 
               const SizedBox(width: 4),
@@ -462,6 +609,7 @@ class _WhiteboardScreenState extends ConsumerState<WhiteboardScreen> {
 
               // AI Assistant (board-aware tutor, generator, diagram maker)
               IconButton(
+                key: _aiKey,
                 icon: Icon(
                   Icons.psychology_alt_rounded,
                   color: _isAssistantOpen
@@ -476,14 +624,26 @@ class _WhiteboardScreenState extends ConsumerState<WhiteboardScreen> {
               // Secondary actions: inline on wide screens, overflow menu on
               // phones (they overflowed the app bar below ~760px).
               if (MediaQuery.sizeOf(context).width >= 760)
-                for (final a in _secondaryActions(
-                  context,
-                  autoOn: state.isAutoMathEnabled || state.isAutoShapeEnabled,
-                  infinite: state.isInfiniteCanvas,
-                ))
-                  IconButton(icon: a.icon, tooltip: a.label, onPressed: a.onTap)
+                Row(
+                  key: _moreKey,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final a in _secondaryActions(
+                      context,
+                      autoOn:
+                          state.isAutoMathEnabled || state.isAutoShapeEnabled,
+                      infinite: state.isInfiniteCanvas,
+                    ))
+                      IconButton(
+                        icon: a.icon,
+                        tooltip: a.label,
+                        onPressed: a.onTap,
+                      ),
+                  ],
+                )
               else
                 PopupMenuButton<int>(
+                  key: _moreKey,
                   tooltip: 'More actions',
                   icon: const Icon(Icons.more_vert_rounded),
                   itemBuilder: (menuContext) {
@@ -558,6 +718,8 @@ class _WhiteboardScreenState extends ConsumerState<WhiteboardScreen> {
                       left: _toolbarPosition!.dx,
                       top: _toolbarPosition!.dy,
                       child: WhiteboardToolbar(
+                        key: _toolbarKey,
+                        toolKeys: _toolKeys,
                         isPropertiesOpen: _isPropertiesOpen,
                         onToggleProperties: _toggleProperties,
                         onHideToolbar: () =>
@@ -640,7 +802,7 @@ class _WhiteboardScreenState extends ConsumerState<WhiteboardScreen> {
                     bottom: MediaQuery.of(context).padding.bottom + 16,
                     left: 16,
                     right: 16,
-                    child: const UnifiedBottomBar(),
+                    child: UnifiedBottomBar(key: _bottomBarKey),
                   ),
 
                   // AI Assistant side panel (non-modal: drawing continues while

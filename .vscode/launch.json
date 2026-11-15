@@ -2,14 +2,14 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "BoardFlow (AI key from dart_defines.json)",
+      "name": "Chalkwise (AI key from dart_defines.json)",
       "request": "launch",
       "type": "dart",
       "program": "lib/main.dart",
       "toolArgs": ["--dart-define-from-file=dart_defines.json"]
     },
     {
-      "name": "BoardFlow release (AI key from dart_defines.json)",
+      "name": "Chalkwise release (AI key from dart_defines.json)",
       "request": "launch",
       "type": "dart",
       "program": "lib/main.dart",

@@ -1,11 +1,11 @@
 {
-    "name": "boardflow",
-    "short_name": "boardflow",
+    "name": "Chalkwise: AI Whiteboard",
+    "short_name": "Chalkwise",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#0B3B35",
+    "theme_color": "#105E50",
+    "description": "AI whiteboard for teaching and learning.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

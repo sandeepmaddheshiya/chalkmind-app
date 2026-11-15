@@ -1,4 +1,4 @@
-package com.boardflow.boardflow
+package com.chalkwise.app
 
 import io.flutter.embedding.android.FlutterActivity
 

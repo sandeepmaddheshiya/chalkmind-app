@@ -47,3 +47,7 @@ app.*.map.json
 # Local build secrets (API keys). Never commit.
 dart_defines.json
 openrouter_provisioning_key.json
+
+# Python caches (brand asset generator)
+__pycache__/
+*.pyc

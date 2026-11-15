@@ -3,16 +3,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:boardflow/app/app.dart';
 
 void main() {
-  testWidgets('BoardFlow app smoke test loads home screen', (WidgetTester tester) async {
+  testWidgets('Chalkwise app smoke test loads home screen', (WidgetTester tester) async {
     await tester.pumpWidget(
       const ProviderScope(
-        child: BoardFlowApp(),
+        child: ChalkwiseApp(),
       ),
     );
 
-    // Verify Home screen header displays BoardFlow brand and actions
-    expect(find.text('BoardFlow'), findsOneWidget);
-    expect(find.text('Whiteboard & Studio'), findsOneWidget);
+    // Verify Home screen header displays Chalkwise brand and actions
+    expect(find.text('Chalkwise'), findsOneWidget);
+    expect(find.text('AI Whiteboard'), findsOneWidget);
     expect(find.text('New Board'), findsOneWidget);
   });
 }

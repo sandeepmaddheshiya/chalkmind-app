@@ -5,6 +5,7 @@ import '../whiteboard/models/background_style.dart';
 import '../whiteboard/models/page_model.dart';
 import '../whiteboard/models/project_model.dart';
 import '../whiteboard/state/whiteboard_notifier.dart';
+import '../onboarding/onboarding_screen.dart';
 import '../whiteboard/pdf/pdf_import_flow.dart';
 import '../whiteboard/ui/whiteboard_screen.dart';
 
@@ -89,11 +90,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _openExistingBoard(ProjectModel project) async {
     // The list holds lightweight summaries; load the full board to open it.
     if (project.isSummary) {
-      final full = await ref.read(projectStorageProvider).loadProject(project.id);
+      final full = await ref
+          .read(projectStorageProvider)
+          .loadProject(project.id);
       if (!mounted) return;
       if (full == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('This board could not be opened. It may have been deleted.')),
+          const SnackBar(
+            content: Text(
+              'This board could not be opened. It may have been deleted.',
+            ),
+          ),
         );
         await _loadData();
         return;
@@ -166,24 +173,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       appBar: AppBar(
         title: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(7),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primary,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(
-                Icons.gesture_rounded,
-                color: Colors.white,
-                size: 18,
-              ),
+            Image.asset(
+              'assets/brand/chalkwise_logo.png',
+              width: 34,
+              height: 34,
+              semanticLabel: 'Chalkwise logo',
             ),
             const SizedBox(width: 12),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'BoardFlow',
+                  'Chalkwise',
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 17,
@@ -191,7 +192,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                 ),
                 Text(
-                  'Whiteboard & Studio',
+                  'AI Whiteboard',
                   style: TextStyle(
                     fontSize: 11,
                     color: Colors.grey.shade500,
@@ -243,6 +244,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onPressed: () => _openNewBoard(),
           ),
           const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.help_outline_rounded, size: 20),
+            tooltip: 'Welcome tour',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (ctx) =>
+                    OnboardingScreen(onDone: () => Navigator.of(ctx).pop()),
+              ),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded, size: 20),
             tooltip: 'Refresh',

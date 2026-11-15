@@ -9,12 +9,16 @@ class WhiteboardToolbar extends ConsumerWidget {
   final VoidCallback? onHideToolbar;
   final GestureDragUpdateCallback? onPanUpdate;
 
+  /// Optional keys on individual tool buttons (used by the tutorial).
+  final Map<ToolType, GlobalKey> toolKeys;
+
   const WhiteboardToolbar({
     super.key,
     required this.onToggleProperties,
     required this.isPropertiesOpen,
     this.onHideToolbar,
     this.onPanUpdate,
+    this.toolKeys = const {},
   });
 
   @override
@@ -116,41 +120,45 @@ class WhiteboardToolbar extends ConsumerWidget {
 
           // Tool buttons
           for (final item in tools) ...[
-            if (item.$1 == ToolType.strokeEraser)
+            KeyedSubtree(
+              key: toolKeys[item.$1],
               // One eraser button: tap again to switch whole-stroke <-> partial.
-              _ToolIconButton(
-                icon: state.currentTool == ToolType.areaEraser
-                    ? Icons.cleaning_services_rounded
-                    : item.$2,
-                tooltip: state.currentTool == ToolType.areaEraser
-                    ? 'Partial Eraser (E) - erases only ink under the cursor. Tap to switch to whole-stroke.'
-                    : state.currentTool == ToolType.strokeEraser
-                    ? 'Stroke Eraser (E) - removes whole strokes. Tap to switch to partial.'
-                    : 'Eraser (E)',
-                isSelected: state.currentTool.isEraser,
-                onPressed: () {
-                  final n = ref.read(whiteboardControllerProvider.notifier);
-                  if (state.currentTool == ToolType.strokeEraser) {
-                    n.setTool(ToolType.areaEraser);
-                  } else if (state.currentTool == ToolType.areaEraser) {
-                    n.setTool(ToolType.strokeEraser);
-                  } else {
-                    n.setTool(ToolType.strokeEraser);
-                  }
-                },
-              )
-            else
-              _ToolIconButton(
-                icon: item.$2,
-                tooltip: item.$3,
-                isSelected: state.currentTool == item.$1,
-                presetColor: state.toolPresets[item.$1]?.color,
-                onPressed: () {
-                  ref
-                      .read(whiteboardControllerProvider.notifier)
-                      .setTool(item.$1);
-                },
-              ),
+              child: item.$1 == ToolType.strokeEraser
+                  ? _ToolIconButton(
+                      icon: state.currentTool == ToolType.areaEraser
+                          ? Icons.cleaning_services_rounded
+                          : item.$2,
+                      tooltip: state.currentTool == ToolType.areaEraser
+                          ? 'Partial Eraser (E) - erases only ink under the cursor. Tap to switch to whole-stroke.'
+                          : state.currentTool == ToolType.strokeEraser
+                          ? 'Stroke Eraser (E) - removes whole strokes. Tap to switch to partial.'
+                          : 'Eraser (E)',
+                      isSelected: state.currentTool.isEraser,
+                      onPressed: () {
+                        final n = ref.read(
+                          whiteboardControllerProvider.notifier,
+                        );
+                        if (state.currentTool == ToolType.strokeEraser) {
+                          n.setTool(ToolType.areaEraser);
+                        } else if (state.currentTool == ToolType.areaEraser) {
+                          n.setTool(ToolType.strokeEraser);
+                        } else {
+                          n.setTool(ToolType.strokeEraser);
+                        }
+                      },
+                    )
+                  : _ToolIconButton(
+                      icon: item.$2,
+                      tooltip: item.$3,
+                      isSelected: state.currentTool == item.$1,
+                      presetColor: state.toolPresets[item.$1]?.color,
+                      onPressed: () {
+                        ref
+                            .read(whiteboardControllerProvider.notifier)
+                            .setTool(item.$1);
+                      },
+                    ),
+            ),
             const SizedBox(height: 4),
           ],
 
