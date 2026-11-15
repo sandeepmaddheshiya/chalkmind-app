@@ -96,7 +96,9 @@ class OpenRouterClient {
   Map<String, String> _headers() => {
     'Authorization': 'Bearer ${config.apiKey}',
     'Content-Type': 'application/json',
-    'X-Title': 'Chalkwise',
+    // App attribution for OpenRouter (identifies Chalkmind's requests).
+    'HTTP-Referer': 'https://chalkmind.tech',
+    'X-Title': 'Chalkmind',
   };
 
   static bool _isRetryableStatus(int code) =>

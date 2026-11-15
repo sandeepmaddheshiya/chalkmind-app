@@ -1,4 +1,4 @@
-package com.chalkwise.app
+package tech.chalkmind.app
 
 import io.flutter.embedding.android.FlutterActivity
 

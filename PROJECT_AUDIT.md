@@ -1,4 +1,4 @@
-# Project Audit — Chalkwise (formerly BoardFlow)
+# Project Audit — Chalkmind (formerly BoardFlow)
 
 _Audit date: 2026-11-15. Scope: full repository at commit `ff75d3b` plus the uncommitted function-plotter work present in the working tree._
 

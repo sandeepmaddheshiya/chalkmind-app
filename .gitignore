@@ -51,3 +51,6 @@ openrouter_provisioning_key.json
 # Python caches (brand asset generator)
 __pycache__/
 *.pyc
+
+# The landing website is a separate repository (chalkmind-site).
+/site/

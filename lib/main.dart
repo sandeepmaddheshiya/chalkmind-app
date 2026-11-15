@@ -18,5 +18,5 @@ void main() async {
     DeviceOrientation.landscapeRight,
   ]);
 
-  runApp(ProviderScope(child: ChalkwiseApp(showOnboarding: showOnboarding)));
+  runApp(ProviderScope(child: ChalkmindApp(showOnboarding: showOnboarding)));
 }

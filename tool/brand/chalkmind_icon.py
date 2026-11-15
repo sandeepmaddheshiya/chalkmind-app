@@ -1,4 +1,4 @@
-"""Chalkwise brand mark: a chalk square-root sign (also reads as a tick) on a
+"""Chalkmind brand mark: a chalk square-root sign (also reads as a tick) on a
 chalkboard-green tile, with a highlighter-yellow AI sparkle in the root.
 
 All geometry is in a 1024 x 1024 design space and drawn 4x supersampled for

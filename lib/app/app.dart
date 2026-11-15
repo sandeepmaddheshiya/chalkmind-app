@@ -3,16 +3,16 @@ import '../features/home/home_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import 'theme/theme.dart';
 
-class ChalkwiseApp extends StatelessWidget {
+class ChalkmindApp extends StatelessWidget {
   /// Show the welcome onboarding first (first launch only).
   final bool showOnboarding;
 
-  const ChalkwiseApp({super.key, this.showOnboarding = false});
+  const ChalkmindApp({super.key, this.showOnboarding = false});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Chalkwise',
+      title: 'Chalkmind',
       debugShowCheckedModeBanner: false,
       theme: BoardTheme.lightTheme(),
       darkTheme: BoardTheme.darkTheme(),

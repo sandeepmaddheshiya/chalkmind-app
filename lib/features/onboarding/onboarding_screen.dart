@@ -27,7 +27,7 @@ const _pages = [
     icon: Icons.gesture_rounded,
     color: Color(0xFF0F5A4D),
     useLogo: true,
-    title: 'Welcome to Chalkwise',
+    title: 'Welcome to Chalkmind',
     body:
         'A smart whiteboard for teaching lessons, solving problems and taking notes.',
     points: [
@@ -56,7 +56,7 @@ const _pages = [
     color: Color(0xFF059669),
     title: 'Smart maths & shapes',
     body:
-        'Write an equation ending in "=" and Chalkwise solves it, in your handwriting.',
+        'Write an equation ending in "=" and Chalkmind solves it, in your handwriting.',
     points: [
       (
         Icons.interests_outlined,
@@ -103,7 +103,7 @@ const _pages = [
   ),
 ];
 
-/// First-launch welcome: what Chalkwise does, in five short pages.
+/// First-launch welcome: what Chalkmind does, in five short pages.
 class OnboardingScreen extends StatefulWidget {
   /// Called when the user finishes or skips (after the choice is saved).
   final VoidCallback onDone;
@@ -458,8 +458,8 @@ class _Illustration extends StatelessWidget {
                 ],
               ),
               child: Image.asset(
-                'assets/brand/chalkwise_logo.png',
-                semanticLabel: 'Chalkwise logo',
+                'assets/brand/chalkmind_logo.png',
+                semanticLabel: 'Chalkmind logo',
               ),
             )
           else

@@ -2,7 +2,7 @@
 <!-- Android 12+ system splash: brand background behind the adaptive icon. -->
 <resources>
     <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
-        <item name="android:windowSplashScreenBackground">@color/chalkwise_board</item>
+        <item name="android:windowSplashScreenBackground">@color/chalkmind_board</item>
         <item name="android:windowBackground">@drawable/launch_background</item>
     </style>
     <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">

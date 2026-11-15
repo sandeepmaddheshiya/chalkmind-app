@@ -1,11 +1,11 @@
-# Chalkwise: Google Play listing
+# Chalkmind: Google Play listing
 
 Assets in this folder: `play_icon_512.png` (store icon), `feature_graphic_1024x500.png`.
 Regenerate all icons/brand images with `python3 tool/brand/generate.py`.
 
 ## App name (title, max 30)
 
-**Chalkwise: AI Whiteboard** (24)
+**Chalkmind: AI Whiteboard** (24)
 
 ## Short description (max 80)
 
@@ -16,9 +16,9 @@ Alternative to A/B test later in Play Console's store listing experiments:
 
 ## Full description (max 4000)
 
-> Write naturally. Learn smarter. Chalkwise is the AI whiteboard for teaching, homework and revision.
+> Write naturally. Learn smarter. Chalkmind is the AI whiteboard for teaching, homework and revision.
 >
-> Write a maths problem by hand, end it with "=", and Chalkwise works it out, then writes the answer in handwriting next to yours. Stuck? Ask the built-in AI tutor to explain, give a hint, or check your working step by step.
+> Write a maths problem by hand, end it with "=", and Chalkmind works it out, then writes the answer in handwriting next to yours. Stuck? Ask the built-in AI tutor to explain, give a hint, or check your working step by step.
 >
 > **SOLVE HANDWRITTEN MATHS**
 > • Arithmetic, algebra, identities, equations and geometry diagrams
@@ -54,6 +54,13 @@ Alternative to A/B test later in Play Console's store listing experiments:
 > • Boards save automatically on your device
 >
 > Privacy: AI features send only what you choose (a selection, page or photo) to an AI service to answer you. Nothing is sent unless you use an AI feature.
+
+## Contact & policy links (Play Console)
+
+- Website: https://chalkmind.tech
+- Privacy policy (required): https://chalkmind.tech/privacy
+- Support email: support@chalkmind.tech
+- App ID: `tech.chalkmind.app` (permanent after first upload)
 
 ## Category & tags
 

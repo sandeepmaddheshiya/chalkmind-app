@@ -1,6 +1,8 @@
-# Chalkwise: AI Whiteboard
+# Chalkmind: AI Whiteboard
 
 A smart whiteboard for teaching and learning, built with Flutter.
+
+Website: https://chalkmind.tech (the landing site lives in its own repository, `chalkmind-site`)
 
 - Handwritten maths solving (answers written back in handwriting), smart shapes, graphs
 - AI tutor: explain, hints, check my work, quizzes, flashcards, lesson plans, editable diagrams

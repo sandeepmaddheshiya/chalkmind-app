@@ -1,4 +1,4 @@
-"""Generates every Chalkwise icon/brand asset from chalkwise_icon.py.
+"""Generates every Chalkmind icon/brand asset from chalkmind_icon.py.
 
 Run from the project root:  python3 tool/brand/generate.py
 """
@@ -7,7 +7,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 from PIL import Image, ImageDraw, ImageFont  # noqa: E402
-from chalkwise_icon import (  # noqa: E402
+from chalkmind_icon import (  # noqa: E402
     BOARD_BOTTOM, BOARD_TOP, CHALK, SPARK, render_glyph_only, render_tile, _gradient,
 )
 
@@ -42,7 +42,7 @@ for d, k in DENSITIES.items():
 
 with open(out('android', 'app', 'src', 'main', 'res', 'drawable', 'ic_launcher_background.xml'), 'w') as f:
     f.write(f'''<?xml version="1.0" encoding="utf-8"?>
-<!-- Chalkwise adaptive icon background: chalkboard-green gradient. -->
+<!-- Chalkmind adaptive icon background: chalkboard-green gradient. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
     <gradient
         android:angle="315"
@@ -73,7 +73,7 @@ d = ImageDraw.Draw(fg)
 title = ImageFont.truetype(FONT, 92)
 sub = ImageFont.truetype(FONT_REG, 36)
 small = ImageFont.truetype(FONT_REG, 28)
-d.text((440, 128), 'Chalkwise', font=title, fill=CHALK)
+d.text((440, 128), 'Chalkmind', font=title, fill=CHALK)
 d.text((444, 248), 'AI whiteboard for teaching', font=sub, fill=(209, 250, 229))
 d.text((444, 294), '& learning', font=sub, fill=(209, 250, 229))
 d.text((444, 362), 'Solve  ·  Explain  ·  Annotate PDFs', font=small, fill=SPARK)
@@ -87,6 +87,6 @@ render_tile(512, rounded=False, glyph_scale=0.72).save(out('web', 'icons', 'Icon
 render_tile(64).save(out('web', 'favicon.png'))
 
 # 6. In-app logo
-render_tile(512).save(out('assets', 'brand', 'chalkwise_logo.png'))
+render_tile(512).save(out('assets', 'brand', 'chalkmind_logo.png'))
 
-print('Chalkwise brand assets generated.')
+print('Chalkmind brand assets generated.')

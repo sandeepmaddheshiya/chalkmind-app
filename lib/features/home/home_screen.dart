@@ -174,17 +174,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         title: Row(
           children: [
             Image.asset(
-              'assets/brand/chalkwise_logo.png',
+              'assets/brand/chalkmind_logo.png',
               width: 34,
               height: 34,
-              semanticLabel: 'Chalkwise logo',
+              semanticLabel: 'Chalkmind logo',
             ),
             const SizedBox(width: 12),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Chalkwise',
+                  'Chalkmind',
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 17,

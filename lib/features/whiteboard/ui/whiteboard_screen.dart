@@ -135,7 +135,7 @@ class _WhiteboardScreenState extends ConsumerState<WhiteboardScreen> {
         icon: Icons.functions_rounded,
         title: 'Try it now',
         body:
-            'Write 2 + 3 = with the pen. Chalkwise will offer the answer in your handwriting.',
+            'Write 2 + 3 = with the pen. Chalkmind will offer the answer in your handwriting.',
       ),
     ];
   }

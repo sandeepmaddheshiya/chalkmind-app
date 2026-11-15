@@ -24,7 +24,7 @@ void main() {
       setSize(tester, const Size(820, 1180));
       bool done = false;
       await tester.pumpWidget(MaterialApp(home: OnboardingScreen(onDone: () => done = true)));
-      expect(find.text('Welcome to Chalkwise'), findsOneWidget);
+      expect(find.text('Welcome to Chalkmind'), findsOneWidget);
       expect(find.text('1 of 5'), findsOneWidget);
 
       for (final title in ['Write naturally', 'Smart maths & shapes', 'Your AI tutor', 'Bring your PDFs']) {
@@ -65,7 +65,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Back'));
       await tester.pumpAndSettle();
-      expect(find.text('Welcome to Chalkwise'), findsOneWidget);
+      expect(find.text('Welcome to Chalkmind'), findsOneWidget);
       await tester.tap(find.text('Skip'));
       await tester.pumpAndSettle();
       expect(done, isTrue);
@@ -91,8 +91,8 @@ void main() {
 
     testWidgets('first launch shows onboarding, then the home screen', (tester) async {
       setSize(tester, const Size(820, 1180));
-      await tester.pumpWidget(const ProviderScope(child: ChalkwiseApp(showOnboarding: true)));
-      expect(find.text('Welcome to Chalkwise'), findsOneWidget);
+      await tester.pumpWidget(const ProviderScope(child: ChalkmindApp(showOnboarding: true)));
+      expect(find.text('Welcome to Chalkmind'), findsOneWidget);
       await tester.tap(find.text('Skip'));
       // (The home screen shows a loading spinner in tests: no file storage.)
       await tester.pump(const Duration(milliseconds: 400));
