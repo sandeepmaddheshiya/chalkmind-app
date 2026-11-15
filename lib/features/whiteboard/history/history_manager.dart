@@ -29,6 +29,16 @@ class HistoryManager {
     return newPage;
   }
 
+  /// Records a command whose effect has already been applied to the page
+  /// (e.g. a live eraser or drag gesture). Clears redo like [execute].
+  void push(BoardCommand command) {
+    _undoStack.add(command);
+    if (_undoStack.length > maxHistoryDepth) {
+      _undoStack.removeAt(0);
+    }
+    _redoStack.clear();
+  }
+
   PageModel undo(PageModel currentPage) {
     if (!canUndo) return currentPage;
     final command = _undoStack.removeLast();

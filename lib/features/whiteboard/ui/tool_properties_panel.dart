@@ -33,61 +33,65 @@ class ToolPropertiesPanel extends ConsumerWidget {
         children: [
           // Section 1: Color Palette
           Text(
-            state.currentTool == ToolType.highlighter ? 'Highlighter Color' : 'Pen Color',
+            state.currentTool == ToolType.highlighter
+                ? 'Highlighter Color'
+                : 'Pen Color',
             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: (state.currentTool == ToolType.highlighter
-                    ? WhiteboardState.highlighterPalette
-                    : WhiteboardState.standardPalette)
-                .map((colorVal) {
-              final isSelected = state.selectedColorValue == colorVal;
-              return GestureDetector(
-                onTap: () {
-                  ref
-                      .read(whiteboardControllerProvider.notifier)
-                      .setColor(colorVal);
-                },
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: Color(colorVal),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: isSelected
-                          ? Theme.of(context).colorScheme.primary
-                          : (colorVal == 0xFFFFFFFF
-                              ? Colors.grey.shade400
-                              : Colors.transparent),
-                      width: isSelected ? 3 : 1,
-                    ),
-                    boxShadow: [
-                      if (isSelected)
-                        BoxShadow(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .primary
-                              .withValues(alpha: 0.4),
-                          blurRadius: 6,
+            children:
+                (state.currentTool == ToolType.highlighter
+                        ? WhiteboardState.highlighterPalette
+                        : WhiteboardState.standardPalette)
+                    .map((colorVal) {
+                      final isSelected = state.selectedColorValue == colorVal;
+                      return GestureDetector(
+                        onTap: () {
+                          ref
+                              .read(whiteboardControllerProvider.notifier)
+                              .setColor(colorVal);
+                        },
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: Color(colorVal),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: isSelected
+                                  ? Theme.of(context).colorScheme.primary
+                                  : (colorVal == 0xFFFFFFFF
+                                        ? Colors.grey.shade400
+                                        : Colors.transparent),
+                              width: isSelected ? 3 : 1,
+                            ),
+                            boxShadow: [
+                              if (isSelected)
+                                BoxShadow(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.primary.withValues(alpha: 0.4),
+                                  blurRadius: 6,
+                                ),
+                            ],
+                          ),
+                          child: isSelected
+                              ? Icon(
+                                  Icons.check,
+                                  size: 16,
+                                  color:
+                                      Color(colorVal).computeLuminance() > 0.5
+                                      ? Colors.black87
+                                      : Colors.white,
+                                )
+                              : null,
                         ),
-                    ],
-                  ),
-                  child: isSelected
-                      ? Icon(
-                          Icons.check,
-                          size: 16,
-                          color: Color(colorVal).computeLuminance() > 0.5
-                              ? Colors.black87
-                              : Colors.white,
-                        )
-                      : null,
-                ),
-              );
-            }).toList(),
+                      );
+                    })
+                    .toList(),
           ),
           const Divider(height: 24),
 
@@ -96,8 +100,13 @@ class ToolPropertiesPanel extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                state.currentTool == ToolType.highlighter ? 'Highlighter Width' : 'Stroke Width',
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                state.currentTool == ToolType.highlighter
+                    ? 'Highlighter Width'
+                    : 'Stroke Width',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               Text(
                 '${state.selectedStrokeWidth.toStringAsFixed(1)} pt',
@@ -149,21 +158,38 @@ class ToolPropertiesPanel extends ConsumerWidget {
           const SizedBox(height: 4),
           Wrap(
             spacing: 6,
-            children: (state.currentTool == ToolType.highlighter
-                    ? <(double, String)>[(14.0, 'Fine 14pt'), (22.0, 'Medium 22pt'), (32.0, 'Broad 32pt')]
-                    : <(double, String)>[(2.0, 'Fine 2pt'), (3.5, 'Medium 3.5pt'), (6.0, 'Bold 6pt'), (12.0, 'Thick 12pt')])
-                .map<Widget>((preset) {
-              final isPresetSelected = (state.selectedStrokeWidth - preset.$1).abs() < 0.5;
-              return ChoiceChip(
-                label: Text(preset.$2, style: const TextStyle(fontSize: 11)),
-                selected: isPresetSelected,
-                onSelected: (selected) {
-                  if (selected) {
-                    ref.read(whiteboardControllerProvider.notifier).setStrokeWidth(preset.$1);
-                  }
-                },
-              );
-            }).toList(),
+            children:
+                (state.currentTool == ToolType.highlighter
+                        ? <(double, String)>[
+                            (14.0, 'Fine 14pt'),
+                            (22.0, 'Medium 22pt'),
+                            (32.0, 'Broad 32pt'),
+                          ]
+                        : <(double, String)>[
+                            (2.0, 'Fine 2pt'),
+                            (3.5, 'Medium 3.5pt'),
+                            (6.0, 'Bold 6pt'),
+                            (12.0, 'Thick 12pt'),
+                          ])
+                    .map<Widget>((preset) {
+                      final isPresetSelected =
+                          (state.selectedStrokeWidth - preset.$1).abs() < 0.5;
+                      return ChoiceChip(
+                        label: Text(
+                          preset.$2,
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                        selected: isPresetSelected,
+                        onSelected: (selected) {
+                          if (selected) {
+                            ref
+                                .read(whiteboardControllerProvider.notifier)
+                                .setStrokeWidth(preset.$1);
+                          }
+                        },
+                      );
+                    })
+                    .toList(),
           ),
 
           // Section 3: Shapes Specific Options
@@ -179,7 +205,10 @@ class ToolPropertiesPanel extends ConsumerWidget {
               children: ShapeType.values.map((st) {
                 final isSelected = state.selectedShapeType == st;
                 return ChoiceChip(
-                  label: Text(st.displayName, style: const TextStyle(fontSize: 12)),
+                  label: Text(
+                    st.displayName,
+                    style: const TextStyle(fontSize: 12),
+                  ),
                   selected: isSelected,
                   onSelected: (selected) {
                     if (selected) {
@@ -224,8 +253,10 @@ class ToolPropertiesPanel extends ConsumerWidget {
                 return Padding(
                   padding: const EdgeInsets.only(right: 6),
                   child: FilterChip(
-                    label: Text(style.displayName,
-                        style: const TextStyle(fontSize: 11)),
+                    label: Text(
+                      style.displayName,
+                      style: const TextStyle(fontSize: 11),
+                    ),
                     selected: isSelected,
                     onSelected: (selected) {
                       if (selected) {
@@ -250,7 +281,9 @@ class ToolPropertiesPanel extends ConsumerWidget {
                   onTap: () {
                     ref
                         .read(whiteboardControllerProvider.notifier)
-                        .setBackground(currentBg.copyWith(colorValue: colorVal));
+                        .setBackground(
+                          currentBg.copyWith(colorValue: colorVal),
+                        );
                   },
                   child: Container(
                     width: 28,
@@ -279,6 +312,39 @@ class ToolPropertiesPanel extends ConsumerWidget {
               );
             }).toList(),
           ),
+
+          if (state.project.currentPage.background.style !=
+              BackgroundStyle.plain) ...[
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Grid / Pattern Spacing',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                ),
+                Text(
+                  '${state.project.currentPage.background.spacing.toInt()} pt',
+                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+              ],
+            ),
+            Slider(
+              value: state.project.currentPage.background.spacing.clamp(
+                16.0,
+                72.0,
+              ),
+              min: 16.0,
+              max: 72.0,
+              divisions: 14,
+              onChanged: (val) {
+                final currentBg = state.project.currentPage.background;
+                ref
+                    .read(whiteboardControllerProvider.notifier)
+                    .setBackground(currentBg.copyWith(spacing: val));
+              },
+            ),
+          ],
 
           const SizedBox(height: 14),
 
@@ -334,8 +400,14 @@ class ToolPropertiesPanel extends ConsumerWidget {
             dense: true,
             contentPadding: EdgeInsets.zero,
             secondary: const Icon(Icons.interests_outlined, size: 20),
-            title: const Text('Auto Shape Detection', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-            subtitle: const Text('Convert hand-drawn strokes to geometric shapes', style: TextStyle(fontSize: 10)),
+            title: const Text(
+              'Auto Shape Detection',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+            ),
+            subtitle: const Text(
+              'Convert hand-drawn strokes to geometric shapes',
+              style: TextStyle(fontSize: 10),
+            ),
             value: state.isAutoShapeEnabled,
             onChanged: (val) {
               ref.read(whiteboardControllerProvider.notifier).setAutoShape(val);
@@ -346,9 +418,19 @@ class ToolPropertiesPanel extends ConsumerWidget {
           SwitchListTile(
             dense: true,
             contentPadding: EdgeInsets.zero,
-            secondary: const Icon(Icons.auto_awesome_rounded, size: 20, color: Color(0xFF059669)),
-            title: const Text('Auto Math Solver', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-            subtitle: const Text('Automatically solve equations ending in "="', style: TextStyle(fontSize: 10)),
+            secondary: const Icon(
+              Icons.auto_awesome_rounded,
+              size: 20,
+              color: Color(0xFF059669),
+            ),
+            title: const Text(
+              'Auto Math Solver',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+            ),
+            subtitle: const Text(
+              'Automatically solve equations ending in "="',
+              style: TextStyle(fontSize: 10),
+            ),
             value: state.isAutoMathEnabled,
             onChanged: (val) {
               ref.read(whiteboardControllerProvider.notifier).setAutoMath(val);
@@ -364,15 +446,22 @@ class ToolPropertiesPanel extends ConsumerWidget {
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF059669),
                   padding: const EdgeInsets.symmetric(vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
                 icon: const Icon(Icons.psychology_outlined, size: 18),
                 label: Text(
                   'Solve Selected (${state.selectedObjectIds.length})',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 onPressed: () {
-                  ref.read(whiteboardControllerProvider.notifier).solveSelectedStrokes();
+                  ref
+                      .read(whiteboardControllerProvider.notifier)
+                      .solveSelectedStrokes();
                 },
               ),
             ),

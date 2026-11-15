@@ -55,8 +55,10 @@ class UnifiedBottomBar extends ConsumerWidget {
                 // Selection Quick Actions if elements are selected
                 if (hasSelection) ...[
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: isDark
                           ? const Color(0xFF374151)
@@ -88,7 +90,9 @@ class UnifiedBottomBar extends ConsumerWidget {
                   TextButton.icon(
                     style: TextButton.styleFrom(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       visualDensity: VisualDensity.compact,
                       foregroundColor: const Color(0xFF059669),
                     ),
@@ -99,14 +103,17 @@ class UnifiedBottomBar extends ConsumerWidget {
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
                               valueColor: AlwaysStoppedAnimation<Color>(
-                                  Color(0xFF059669)),
+                                Color(0xFF059669),
+                              ),
                             ),
                           )
                         : const Icon(Icons.auto_awesome_rounded, size: 15),
                     label: Text(
                       state.isCalculatingMath ? 'Solving...' : 'Solve',
                       style: const TextStyle(
-                          fontSize: 11, fontWeight: FontWeight.bold),
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     onPressed: state.isCalculatingMath
                         ? null
@@ -117,11 +124,26 @@ class UnifiedBottomBar extends ConsumerWidget {
                           },
                   ),
 
+                  // Duplicate Selected Button
+                  IconButton(
+                    icon: const Icon(Icons.copy_all_rounded, size: 17),
+                    tooltip: 'Duplicate (Ctrl+D)',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () {
+                      ref
+                          .read(whiteboardControllerProvider.notifier)
+                          .duplicateSelected();
+                    },
+                  ),
+
                   // Delete Selected Button
                   IconButton(
-                    icon: const Icon(Icons.delete_outline_rounded,
-                        color: Colors.red, size: 18),
-                    tooltip: 'Delete Selected',
+                    icon: const Icon(
+                      Icons.delete_outline_rounded,
+                      color: Colors.red,
+                      size: 18,
+                    ),
+                    tooltip: 'Delete Selected (Del)',
                     visualDensity: VisualDensity.compact,
                     onPressed: () {
                       ref
@@ -166,10 +188,13 @@ class UnifiedBottomBar extends ConsumerWidget {
                     message: 'View all ${itemNoun}s',
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
-                        color:
-                            isDark ? Colors.white10 : const Color(0xFFF3F4F6),
+                        color: isDark
+                            ? Colors.white10
+                            : const Color(0xFFF3F4F6),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
@@ -216,7 +241,9 @@ class UnifiedBottomBar extends ConsumerWidget {
                   tooltip: 'Add $itemNoun',
                   visualDensity: VisualDensity.compact,
                   onPressed: () {
-                    ref.read(whiteboardControllerProvider.notifier).addNewPage();
+                    ref
+                        .read(whiteboardControllerProvider.notifier)
+                        .addNewPage();
                   },
                 ),
 
@@ -244,10 +271,13 @@ class UnifiedBottomBar extends ConsumerWidget {
                     message: 'Reset Zoom (100%)',
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 3),
+                        horizontal: 6,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
-                        color:
-                            isDark ? Colors.white10 : const Color(0xFFF3F4F6),
+                        color: isDark
+                            ? Colors.white10
+                            : const Color(0xFFF3F4F6),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
@@ -263,12 +293,23 @@ class UnifiedBottomBar extends ConsumerWidget {
 
                 IconButton(
                   icon: const Icon(Icons.add_rounded, size: 16),
-                  tooltip: 'Zoom In',
+                  tooltip: 'Zoom In (Ctrl +)',
                   visualDensity: VisualDensity.compact,
                   onPressed: () {
                     ref
                         .read(canvasZoomActionProvider.notifier)
                         .trigger(CanvasZoomAction.zoomIn);
+                  },
+                ),
+
+                IconButton(
+                  icon: const Icon(Icons.fit_screen_rounded, size: 16),
+                  tooltip: 'Fit All Content (Shift+1)',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () {
+                    ref
+                        .read(canvasZoomActionProvider.notifier)
+                        .trigger(CanvasZoomAction.fitContent);
                   },
                 ),
 
@@ -339,7 +380,10 @@ class UnifiedBottomBar extends ConsumerWidget {
                       child: ListTile(
                         dense: true,
                         contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.content_copy_rounded, size: 18),
+                        leading: const Icon(
+                          Icons.content_copy_rounded,
+                          size: 18,
+                        ),
                         title: Text(
                           'Duplicate $itemNoun',
                           style: const TextStyle(fontSize: 13),
@@ -364,12 +408,17 @@ class UnifiedBottomBar extends ConsumerWidget {
                       child: ListTile(
                         dense: true,
                         contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.clear_all_rounded,
-                            size: 18, color: Colors.red),
+                        leading: const Icon(
+                          Icons.clear_all_rounded,
+                          size: 18,
+                          color: Colors.red,
+                        ),
                         title: Text(
                           'Clear $itemNoun Content',
                           style: const TextStyle(
-                              fontSize: 13, color: Colors.red),
+                            fontSize: 13,
+                            color: Colors.red,
+                          ),
                         ),
                       ),
                     ),
@@ -407,14 +456,14 @@ class UnifiedBottomBar extends ConsumerWidget {
     );
   }
 
-  void _confirmClearPage(
-      BuildContext context, WidgetRef ref, String itemNoun) {
+  void _confirmClearPage(BuildContext context, WidgetRef ref, String itemNoun) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('Clear $itemNoun?'),
         content: Text(
-            'This will erase all handwritten ink, shapes, and text on this $itemNoun. This action cannot be undone.'),
+          'This will erase all handwritten ink, shapes, and text on this $itemNoun. This action cannot be undone.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -456,7 +505,9 @@ class UnifiedBottomBar extends ConsumerWidget {
                 children: [
                   Padding(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 16),
+                      horizontal: 20,
+                      vertical: 16,
+                    ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -487,7 +538,7 @@ class UnifiedBottomBar extends ConsumerWidget {
                       padding: const EdgeInsets.all(16),
                       scrollDirection: Axis.horizontal,
                       itemCount: project.pages.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 14),
+                      separatorBuilder: (_, _) => const SizedBox(width: 14),
                       itemBuilder: (context, index) {
                         final isCurrent = index == project.currentPageIndex;
                         final page = project.pages[index];
@@ -508,8 +559,8 @@ class UnifiedBottomBar extends ConsumerWidget {
                                 color: isCurrent
                                     ? Theme.of(context).colorScheme.primary
                                     : (isDark
-                                        ? Colors.grey.shade700
-                                        : Colors.grey.shade300),
+                                          ? Colors.grey.shade700
+                                          : Colors.grey.shade300),
                                 width: isCurrent ? 2.5 : 1,
                               ),
                               boxShadow: [
@@ -562,8 +613,10 @@ class UnifiedBottomBar extends ConsumerWidget {
                                       visualDensity: VisualDensity.compact,
                                       onPressed: () {
                                         ref
-                                            .read(whiteboardControllerProvider
-                                                .notifier)
+                                            .read(
+                                              whiteboardControllerProvider
+                                                  .notifier,
+                                            )
                                             .deletePage(index);
                                       },
                                     ),

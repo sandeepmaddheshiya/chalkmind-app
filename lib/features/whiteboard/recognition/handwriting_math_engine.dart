@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/stroke_model.dart';
-import '../models/shape_model.dart';
 import '../models/tool_type.dart';
 import 'math_evaluator.dart';
 import 'shape_detector.dart';
@@ -31,6 +30,8 @@ class HandwritingMathResult {
     this.steps = const [],
     this.explanation,
   });
+
+  Offset get suggestedWritePosition => insertPosition;
 }
 
 class HandwritingMathEngine {
@@ -105,7 +106,9 @@ class HandwritingMathEngine {
 
   /// Detects if the latest drawn strokes on the page form an arithmetic expression ending with '='
   /// Works at ANY angle (slanted handwriting, horizontal, vertical) and at any drawing scale.
-  static HandwritingMathResult? detectHandwrittenEquation(List<Stroke> pageStrokes) {
+  static HandwritingMathResult? detectHandwrittenEquation(
+    List<Stroke> pageStrokes,
+  ) {
     if (pageStrokes.length < 2) return null;
 
     // 1. Detect '=' sign at any angle near the end of the stroke list
@@ -114,12 +117,15 @@ class HandwritingMathEngine {
 
     final eqCenter = equalSignInfo.center;
     final dir = equalSignInfo.direction; // Unit vector along text direction
-    final normal = equalSignInfo.normal; // Unit normal vector perpendicular to text
+    final normal =
+        equalSignInfo.normal; // Unit normal vector perpendicular to text
     final eqHeight = math.max(30.0, equalSignInfo.length * 1.5);
 
     // GUARD A: Multiple '=' signs present on page (e.g. system of equations: x = 3, y = x + 2, y =)
     // A system of equations or multi-step derivation must be solved by Vision AI.
-    final otherStrokes = pageStrokes.where((s) => !equalSignInfo.consumedStrokeIds.contains(s.id)).toList();
+    final otherStrokes = pageStrokes
+        .where((s) => !equalSignInfo.consumedStrokeIds.contains(s.id))
+        .toList();
     if (detectAngleInvariantEqualSign(otherStrokes) != null) {
       return null;
     }
@@ -184,7 +190,11 @@ class HandwritingMathEngine {
     equationStrokes.sort((a, b) => a.u.compareTo(b.u));
 
     // 3. Classify strokes in baseline-aligned coordinates
-    final tokenString = _classifyBaselineAlignedStrokes(equationStrokes, dir, normal);
+    final tokenString = _classifyBaselineAlignedStrokes(
+      equationStrokes,
+      dir,
+      normal,
+    );
     if (tokenString.isEmpty) return null;
 
     // 4. Solve the equation using MathEvaluator
@@ -192,10 +202,19 @@ class HandwritingMathEngine {
     if (evalResult == null) return null;
 
     // Calculate insertion position: placed directly after '=' along the text direction
-    final targetHeight = math.max(28.0, math.min(140.0, equalSignInfo.length * 1.5));
-    final insertOffset = eqCenter + dir * (equalSignInfo.length * 0.9 + 25.0) - normal * (targetHeight * 0.5);
+    final targetHeight = math.max(
+      28.0,
+      math.min(140.0, equalSignInfo.length * 1.5),
+    );
+    final insertOffset =
+        eqCenter +
+        dir * (equalSignInfo.length * 0.9 + 25.0) -
+        normal * (targetHeight * 0.5);
 
-    final details = UniversalMathEngine.getStepsAndExplanation(tokenString, evalResult.resultText);
+    final details = UniversalMathEngine.getStepsAndExplanation(
+      tokenString,
+      evalResult.resultText,
+    );
 
     return HandwritingMathResult(
       expression: '$tokenString =',
@@ -211,7 +230,9 @@ class HandwritingMathEngine {
     );
   }
 
-  static AngleInvariantEqualSign? detectAngleInvariantEqualSign(List<Stroke> strokes) {
+  static AngleInvariantEqualSign? detectAngleInvariantEqualSign(
+    List<Stroke> strokes,
+  ) {
     final count = strokes.length;
     if (count < 2) return null;
 
@@ -231,7 +252,10 @@ class HandwritingMathEngine {
     return null;
   }
 
-  static AngleInvariantEqualSign? _checkTwoStrokesForEqual(Stroke s1, Stroke s2) {
+  static AngleInvariantEqualSign? _checkTwoStrokesForEqual(
+    Stroke s1,
+    Stroke s2,
+  ) {
     final chord1 = _getStrokeChord(s1);
     final chord2 = _getStrokeChord(s2);
 
@@ -247,7 +271,9 @@ class HandwritingMathEngine {
     if (maxLen / minLen > 2.5) return null;
 
     // Straightness check: chord should be >= 65% of total path length
-    if (len1 / _getPathLength(s1) < 0.65 || len2 / _getPathLength(s2) < 0.65) return null;
+    if (len1 / _getPathLength(s1) < 0.65 || len2 / _getPathLength(s2) < 0.65) {
+      return null;
+    }
 
     // Compute angle of each bar
     double angle1 = math.atan2(chord1.dy, chord1.dx);
@@ -317,14 +343,18 @@ class HandwritingMathEngine {
     final buffer = StringBuffer();
     int i = 0;
 
-    final heights = projected.map((p) => p.stroke.bounds.height).toList()..sort();
-    final medianHeight = heights.isNotEmpty ? heights[heights.length ~/ 2] : 40.0;
+    final heights = projected.map((p) => p.stroke.bounds.height).toList()
+      ..sort();
+    final medianHeight = heights.isNotEmpty
+        ? heights[heights.length ~/ 2]
+        : 40.0;
 
     while (i < projected.length) {
       final curr = projected[i];
 
       // Check 2-stroke operators and digits only if they overlap horizontally along text baseline:
-      if (i + 1 < projected.length && _strokesOverlapInU(curr.stroke, projected[i + 1].stroke, dir)) {
+      if (i + 1 < projected.length &&
+          _strokesOverlapInU(curr.stroke, projected[i + 1].stroke, dir)) {
         final next = projected[i + 1];
         if (_isTwoStrokePlus(curr.stroke, next.stroke, dir, normal)) {
           buffer.write(' + ');
@@ -372,12 +402,18 @@ class HandwritingMathEngine {
     return buffer.toString().trim();
   }
 
-  static void _appendToken(StringBuffer buffer, String token, _ProjectedStroke curr, double medianHeight) {
+  static void _appendToken(
+    StringBuffer buffer,
+    String token,
+    _ProjectedStroke curr,
+    double medianHeight,
+  ) {
     // Check if token is an exponent/superscript (e.g. 2^2, a^3, b^3, x^2)
     final isElevated = curr.v < -medianHeight * 0.12;
     final isSmaller = curr.stroke.bounds.height <= medianHeight * 0.85;
     final prevText = buffer.toString().trim();
-    final canBeExponent = prevText.isNotEmpty &&
+    final canBeExponent =
+        prevText.isNotEmpty &&
         (RegExp(r'[\d)xyzabnc]$', caseSensitive: false).hasMatch(prevText)) &&
         RegExp(r'^\d+$').hasMatch(token);
 
@@ -408,7 +444,12 @@ class HandwritingMathEngine {
     return overlap > -2.0;
   }
 
-  static bool _isTwoStrokePlus(Stroke s1, Stroke s2, Offset dir, Offset normal) {
+  static bool _isTwoStrokePlus(
+    Stroke s1,
+    Stroke s2,
+    Offset dir,
+    Offset normal,
+  ) {
     final chord1 = _getStrokeChord(s1);
     final chord2 = _getStrokeChord(s2);
 
@@ -441,14 +482,20 @@ class HandwritingMathEngine {
     return (s1AlongDir && s2AcrossDir) || (s1AcrossDir && s2AlongDir);
   }
 
-  static bool _isTwoStrokeMultiply(Stroke s1, Stroke s2, Offset dir, Offset normal) {
+  static bool _isTwoStrokeMultiply(
+    Stroke s1,
+    Stroke s2,
+    Offset dir,
+    Offset normal,
+  ) {
     final chord1 = _getStrokeChord(s1);
     final chord2 = _getStrokeChord(s2);
 
     final pathLen1 = _getPathLength(s1);
     final pathLen2 = _getPathLength(s2);
     // Both strokes MUST be straight lines:
-    if (chord1.distance / pathLen1 < 0.70 || chord2.distance / pathLen2 < 0.70) {
+    if (chord1.distance / pathLen1 < 0.70 ||
+        chord2.distance / pathLen2 < 0.70) {
       return false;
     }
 
@@ -478,7 +525,12 @@ class HandwritingMathEngine {
     return (slope1 * slope2) < 0;
   }
 
-  static bool _isTwoStrokeFive(Stroke s1, Stroke s2, Offset dir, Offset normal) {
+  static bool _isTwoStrokeFive(
+    Stroke s1,
+    Stroke s2,
+    Offset dir,
+    Offset normal,
+  ) {
     final b1 = s1.bounds;
     final b2 = s2.bounds;
     final union = b1.expandToInclude(b2);
@@ -491,8 +543,10 @@ class HandwritingMathEngine {
     final u2 = (chord2.dx * dir.dx + chord2.dy * dir.dy).abs();
     final v2 = (chord2.dx * normal.dx + chord2.dy * normal.dy).abs();
 
-    final s1IsBar = u1 > v1 * 1.3 && _getPathLength(s1) / chord1.distance < 1.35;
-    final s2IsBar = u2 > v2 * 1.3 && _getPathLength(s2) / chord2.distance < 1.35;
+    final s1IsBar =
+        u1 > v1 * 1.3 && _getPathLength(s1) / chord1.distance < 1.35;
+    final s2IsBar =
+        u2 > v2 * 1.3 && _getPathLength(s2) / chord2.distance < 1.35;
 
     if (s1IsBar && !s2IsBar) {
       return b2.height > union.height * 0.60;
@@ -502,7 +556,12 @@ class HandwritingMathEngine {
     return false;
   }
 
-  static bool _isTwoStrokeFour(Stroke s1, Stroke s2, Offset dir, Offset normal) {
+  static bool _isTwoStrokeFour(
+    Stroke s1,
+    Stroke s2,
+    Offset dir,
+    Offset normal,
+  ) {
     final chord1 = _getStrokeChord(s1);
     final chord2 = _getStrokeChord(s2);
 
@@ -516,7 +575,11 @@ class HandwritingMathEngine {
     return (s1IsVertical && !s2IsVertical) || (s2IsVertical && !s1IsVertical);
   }
 
-  static String? _classifySingleStrokeAligned(Stroke s, Offset dir, Offset normal) {
+  static String? _classifySingleStrokeAligned(
+    Stroke s,
+    Offset dir,
+    Offset normal,
+  ) {
     final pts = s.points;
     if (pts.length < 2) return null;
 
@@ -554,12 +617,19 @@ class HandwritingMathEngine {
     }
 
     // 1. Minus (-) : Straight stroke along text baseline
-    if (straightness > 0.70 && uChord > vChord * 1.8 && uSpan > 10.0 && vSpan < uSpan * 0.45) {
+    if (straightness > 0.70 &&
+        uChord > vChord * 1.8 &&
+        uSpan > 10.0 &&
+        vSpan < uSpan * 0.45) {
       return ' - ';
     }
 
     // 2. Division slash (/) : Straight diagonal stroke
-    if (straightness > 0.75 && vChord > 15.0 && uChord > 6.0 && (lastV - firstV) > 0 && (lastU - firstU) < 0) {
+    if (straightness > 0.75 &&
+        vChord > 15.0 &&
+        uChord > 6.0 &&
+        (lastV - firstV) > 0 &&
+        (lastU - firstU) < 0) {
       return ' / ';
     }
 
@@ -570,7 +640,8 @@ class HandwritingMathEngine {
 
     // 4. Closed loops: Zero (0) vs Eight (8) vs Letter 'a'
     final startToEnd = (pts.last.offset - pts.first.offset).distance;
-    final isClosedLoop = startToEnd < pathLen * 0.35 && vSpan > 14.0 && uSpan > 8.0;
+    final isClosedLoop =
+        startToEnd < pathLen * 0.35 && vSpan > 14.0 && uSpan > 8.0;
 
     if (isClosedLoop) {
       // Check for hourglass waist of digit 8:
@@ -605,13 +676,17 @@ class HandwritingMathEngine {
       final wMid = maxU50 > minU50 ? maxU50 - minU50 : 0.0;
       final wBot = maxU75 > minU75 ? maxU75 - minU75 : 0.0;
 
-      final hasWaist = wTop > uSpan * 0.40 && wBot > uSpan * 0.40 && wMid < math.min(wTop, wBot) * 0.72;
+      final hasWaist =
+          wTop > uSpan * 0.40 &&
+          wBot > uSpan * 0.40 &&
+          wMid < math.min(wTop, wBot) * 0.72;
       if (hasWaist) {
         return '8';
       }
 
       // Check if it's letter 'a': single loop with right-side downward stem
-      final endsBottomRight = lastU > minU + uSpan * 0.45 && lastV > minV + vSpan * 0.50;
+      final endsBottomRight =
+          lastU > minU + uSpan * 0.45 && lastV > minV + vSpan * 0.50;
       if (endsBottomRight && wMid > uSpan * 0.60) {
         return 'a';
       }
@@ -661,7 +736,8 @@ class HandwritingMathEngine {
     // Check Letter 'b':
     // Starts at top-left, has a tall left ascender stem in upper half (u < minU + uSpan * 0.58)
     // and a bottom-right loop in the lower half (reaches u > minU + uSpan * 0.65)
-    final bStartsTopLeft = firstU < minU + uSpan * 0.50 && firstV < minV + vSpan * 0.35;
+    final bStartsTopLeft =
+        firstU < minU + uSpan * 0.50 && firstV < minV + vSpan * 0.35;
     if (bStartsTopLeft && vSpan > 18.0) {
       double maxUInTop = minU;
       double maxUInBot = minU;
@@ -683,9 +759,12 @@ class HandwritingMathEngine {
 
     // Check Letter 'c':
     // Open crescent curving to the left: starts top-right, curves through left, ends bottom-right
-    if (firstU > minU + uSpan * 0.45 && firstV < minV + vSpan * 0.40 &&
-        lastU > minU + uSpan * 0.45 && lastV > minV + vSpan * 0.60 &&
-        !isClosedLoop && straightness < 0.65) {
+    if (firstU > minU + uSpan * 0.45 &&
+        firstV < minV + vSpan * 0.40 &&
+        lastU > minU + uSpan * 0.45 &&
+        lastV > minV + vSpan * 0.60 &&
+        !isClosedLoop &&
+        straightness < 0.65) {
       double minUInMid = maxU;
       for (int k = 0; k < pts.length; k++) {
         if ((vVals[k] - (minV + vSpan * 0.5)).abs() < vSpan * 0.25) {
@@ -743,7 +822,8 @@ class HandwritingMathEngine {
 
     // Check Seven (7):
     // Starts top-left, moves to top-right, goes down to bottom-left/center
-    final startsTopLeft = firstU < minU + uSpan * 0.50 && firstV < minV + vSpan * 0.35;
+    final startsTopLeft =
+        firstU < minU + uSpan * 0.50 && firstV < minV + vSpan * 0.35;
     final endsBottomLeft = lastU < minU + uSpan * 0.65 && endsBottom;
     if (startsTopLeft && endsBottomLeft && straightness > 0.55 && !hasTopLoop) {
       double maxUAtTop = minU;
@@ -769,7 +849,9 @@ class HandwritingMathEngine {
 
     // Check Five (5):
     // Single stroke 5: starts top-right, top bar left, stem down, bottom lobe open left
-    if (firstU > minU + uSpan * 0.35 && firstV < minV + vSpan * 0.40 && lastU < minU + uSpan * 0.70) {
+    if (firstU > minU + uSpan * 0.35 &&
+        firstV < minV + vSpan * 0.40 &&
+        lastU < minU + uSpan * 0.70) {
       final isCurved = pathLen / math.max(1.0, chordDist) > 1.25;
       if (isCurved && vSpan > 15.0) {
         return '5';
@@ -793,7 +875,10 @@ class HandwritingMathEngine {
 
     // Check single-stroke Four (4):
     // Must NOT be a straight diagonal line (e.g. straightness must be < 0.72)
-    if (straightness < 0.72 && startsTop && endsBottom && lastU > minU + uSpan * 0.40) {
+    if (straightness < 0.72 &&
+        startsTop &&
+        endsBottom &&
+        lastU > minU + uSpan * 0.40) {
       return '4';
     }
 

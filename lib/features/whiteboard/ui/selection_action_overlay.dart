@@ -13,7 +13,8 @@ class SelectionActionOverlay extends ConsumerWidget {
     final state = ref.watch(whiteboardControllerProvider);
 
     // Only visible when selector tool is active and at least one object is selected
-    final isVisible = state.currentTool == ToolType.select &&
+    final isVisible =
+        state.currentTool == ToolType.select &&
         state.selectedObjectIds.isNotEmpty;
 
     if (!isVisible) return const SizedBox.shrink();
@@ -85,7 +86,10 @@ class SelectionActionOverlay extends ConsumerWidget {
               // Solve Selected Button
               if (isCalculating) ...[
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF059669).withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(20),
@@ -98,7 +102,9 @@ class SelectionActionOverlay extends ConsumerWidget {
                         height: 14,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF059669)),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Color(0xFF059669),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -107,7 +113,9 @@ class SelectionActionOverlay extends ConsumerWidget {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: isDark ? const Color(0xFF34D399) : const Color(0xFF059669),
+                          color: isDark
+                              ? const Color(0xFF34D399)
+                              : const Color(0xFF059669),
                         ),
                       ),
                     ],
@@ -118,7 +126,10 @@ class SelectionActionOverlay extends ConsumerWidget {
                   style: FilledButton.styleFrom(
                     backgroundColor: const Color(0xFF059669),
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
                     minimumSize: const Size(0, 34),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
@@ -130,7 +141,9 @@ class SelectionActionOverlay extends ConsumerWidget {
                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                   ),
                   onPressed: () {
-                    ref.read(whiteboardControllerProvider.notifier).solveSelectedStrokes();
+                    ref
+                        .read(whiteboardControllerProvider.notifier)
+                        .solveSelectedStrokes();
                   },
                 ),
               ],
@@ -144,7 +157,9 @@ class SelectionActionOverlay extends ConsumerWidget {
                 visualDensity: VisualDensity.compact,
                 color: isDark ? Colors.red.shade300 : Colors.red.shade600,
                 onPressed: () {
-                  ref.read(whiteboardControllerProvider.notifier).deleteSelected();
+                  ref
+                      .read(whiteboardControllerProvider.notifier)
+                      .deleteSelected();
                 },
               ),
 
@@ -155,7 +170,9 @@ class SelectionActionOverlay extends ConsumerWidget {
                 visualDensity: VisualDensity.compact,
                 color: isDark ? Colors.white60 : Colors.black54,
                 onPressed: () {
-                  ref.read(whiteboardControllerProvider.notifier).clearSelection();
+                  ref
+                      .read(whiteboardControllerProvider.notifier)
+                      .clearSelection();
                 },
               ),
             ],

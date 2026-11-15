@@ -66,8 +66,8 @@ class ActiveStrokePainter extends CustomPainter {
 
       final fillPaint = isShapeFilled
           ? (Paint()
-            ..color = color.withValues(alpha: 0.2)
-            ..style = PaintingStyle.fill)
+              ..color = color.withValues(alpha: 0.2)
+              ..style = PaintingStyle.fill)
           : null;
 
       final rect = Rect.fromPoints(shapeStart!, shapeEnd!);
@@ -101,9 +101,18 @@ class ActiveStrokePainter extends CustomPainter {
 
         case ShapeType.triangle:
           final path = Path();
-          final top = Offset((shapeStart!.dx + shapeEnd!.dx) / 2, math.min(shapeStart!.dy, shapeEnd!.dy));
-          final bottomLeft = Offset(math.min(shapeStart!.dx, shapeEnd!.dx), math.max(shapeStart!.dy, shapeEnd!.dy));
-          final bottomRight = Offset(math.max(shapeStart!.dx, shapeEnd!.dx), math.max(shapeStart!.dy, shapeEnd!.dy));
+          final top = Offset(
+            (shapeStart!.dx + shapeEnd!.dx) / 2,
+            math.min(shapeStart!.dy, shapeEnd!.dy),
+          );
+          final bottomLeft = Offset(
+            math.min(shapeStart!.dx, shapeEnd!.dx),
+            math.max(shapeStart!.dy, shapeEnd!.dy),
+          );
+          final bottomRight = Offset(
+            math.max(shapeStart!.dx, shapeEnd!.dx),
+            math.max(shapeStart!.dy, shapeEnd!.dy),
+          );
           path.moveTo(top.dx, top.dy);
           path.lineTo(bottomLeft.dx, bottomLeft.dy);
           path.lineTo(bottomRight.dx, bottomRight.dy);
@@ -152,10 +161,10 @@ class ActiveStrokePainter extends CustomPainter {
           final sides = activeShapeType == ShapeType.pentagon
               ? 5
               : activeShapeType == ShapeType.hexagon
-                  ? 6
-                  : activeShapeType == ShapeType.heptagon
-                      ? 7
-                      : 8;
+              ? 6
+              : activeShapeType == ShapeType.heptagon
+              ? 7
+              : 8;
           final polyPath = Path();
           final center = rect.center;
           final rx = rect.width / 2;
@@ -181,7 +190,8 @@ class ActiveStrokePainter extends CustomPainter {
     // 3. Paint eraser cursor indicator
     if (eraserPosition != null) {
       final eraserBorder = Paint()
-        ..color = const Color(0xCCEF4444) // Semi-transparent red circle
+        ..color =
+            const Color(0xCCEF4444) // Semi-transparent red circle
         ..strokeWidth = 2.0
         ..style = PaintingStyle.stroke;
 

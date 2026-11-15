@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
 import '../models/shape_model.dart';
 import '../models/stroke_model.dart';
@@ -12,32 +13,53 @@ class BoardPainter extends CustomPainter {
   final List<TextObject> texts;
   final Set<String> selectedIds;
 
+  /// Elements not to paint (e.g. the selection while it is being dragged;
+  /// a separate preview layer paints them at the drag offset).
+  final Set<String> hiddenIds;
+
   BoardPainter({
     required this.strokes,
     required this.shapes,
     required this.texts,
     this.selectedIds = const {},
+    this.hiddenIds = const {},
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    // 1. Paint shapes first (usually background diagrams/boxes)
+    paintElements(
+      canvas,
+      strokes: strokes,
+      shapes: shapes,
+      texts: texts,
+      hiddenIds: hiddenIds,
+    );
+  }
+
+  /// Paints board content in z-order: shapes, then ink, then text.
+  static void paintElements(
+    Canvas canvas, {
+    required List<Stroke> strokes,
+    required List<ShapeObject> shapes,
+    required List<TextObject> texts,
+    Set<String> hiddenIds = const {},
+  }) {
+    final hide = hiddenIds.isNotEmpty;
     for (final shape in shapes) {
+      if (hide && hiddenIds.contains(shape.id)) continue;
       _paintShape(canvas, shape);
     }
-
-    // 2. Paint completed ink strokes
     for (final stroke in strokes) {
+      if (hide && hiddenIds.contains(stroke.id)) continue;
       _paintStroke(canvas, stroke);
     }
-
-    // 3. Paint text annotations
     for (final text in texts) {
-      _paintText(canvas, text);
+      if (hide && hiddenIds.contains(text.id)) continue;
+      text.layoutPainter.paint(canvas, text.position);
     }
   }
 
-  void _paintStroke(Canvas canvas, Stroke stroke) {
+  static void _paintStroke(Canvas canvas, Stroke stroke) {
     if (stroke.points.isEmpty) return;
 
     final paint = Paint()
@@ -59,7 +81,7 @@ class BoardPainter extends CustomPainter {
     canvas.drawPath(stroke.path, paint);
   }
 
-  void _paintShape(Canvas canvas, ShapeObject shape) {
+  static void _paintShape(Canvas canvas, ShapeObject shape) {
     final strokePaint = Paint()
       ..color = shape.strokeColor
       ..strokeWidth = shape.strokeWidth
@@ -69,8 +91,8 @@ class BoardPainter extends CustomPainter {
 
     final fillPaint = shape.isFilled && shape.fillColor != null
         ? (Paint()
-          ..color = shape.fillColor!
-          ..style = PaintingStyle.fill)
+            ..color = shape.fillColor!
+            ..style = PaintingStyle.fill)
         : null;
 
     final rect = Rect.fromPoints(shape.start, shape.end);
@@ -78,9 +100,15 @@ class BoardPainter extends CustomPainter {
     // If custom vertices are present (e.g. detected triangle or star), draw exact polygon
     if (shape.customVertices != null && shape.customVertices!.length >= 3) {
       final polyPath = Path();
-      polyPath.moveTo(shape.customVertices!.first.dx, shape.customVertices!.first.dy);
+      polyPath.moveTo(
+        shape.customVertices!.first.dx,
+        shape.customVertices!.first.dy,
+      );
       for (int i = 1; i < shape.customVertices!.length; i++) {
-        polyPath.lineTo(shape.customVertices![i].dx, shape.customVertices![i].dy);
+        polyPath.lineTo(
+          shape.customVertices![i].dx,
+          shape.customVertices![i].dy,
+        );
       }
       polyPath.close();
 
@@ -121,13 +149,25 @@ class BoardPainter extends CustomPainter {
         if (shape.customVertices != null && shape.customVertices!.length >= 3) {
           path.moveTo(shape.customVertices![0].dx, shape.customVertices![0].dy);
           for (int i = 1; i < shape.customVertices!.length; i++) {
-            path.lineTo(shape.customVertices![i].dx, shape.customVertices![i].dy);
+            path.lineTo(
+              shape.customVertices![i].dx,
+              shape.customVertices![i].dy,
+            );
           }
           path.close();
         } else {
-          final top = Offset((shape.start.dx + shape.end.dx) / 2, math.min(shape.start.dy, shape.end.dy));
-          final bottomLeft = Offset(math.min(shape.start.dx, shape.end.dx), math.max(shape.start.dy, shape.end.dy));
-          final bottomRight = Offset(math.max(shape.start.dx, shape.end.dx), math.max(shape.start.dy, shape.end.dy));
+          final top = Offset(
+            (shape.start.dx + shape.end.dx) / 2,
+            math.min(shape.start.dy, shape.end.dy),
+          );
+          final bottomLeft = Offset(
+            math.min(shape.start.dx, shape.end.dx),
+            math.max(shape.start.dy, shape.end.dy),
+          );
+          final bottomRight = Offset(
+            math.max(shape.start.dx, shape.end.dx),
+            math.max(shape.start.dy, shape.end.dy),
+          );
           path.moveTo(top.dx, top.dy);
           path.lineTo(bottomLeft.dx, bottomLeft.dy);
           path.lineTo(bottomRight.dx, bottomRight.dy);
@@ -162,19 +202,25 @@ class BoardPainter extends CustomPainter {
         final Path polyPath;
         if (shape.customVertices != null && shape.customVertices!.length >= 3) {
           polyPath = Path();
-          polyPath.moveTo(shape.customVertices![0].dx, shape.customVertices![0].dy);
+          polyPath.moveTo(
+            shape.customVertices![0].dx,
+            shape.customVertices![0].dy,
+          );
           for (int i = 1; i < shape.customVertices!.length; i++) {
-            polyPath.lineTo(shape.customVertices![i].dx, shape.customVertices![i].dy);
+            polyPath.lineTo(
+              shape.customVertices![i].dx,
+              shape.customVertices![i].dy,
+            );
           }
           polyPath.close();
         } else {
           final sides = shape.shapeType == ShapeType.pentagon
               ? 5
               : shape.shapeType == ShapeType.hexagon
-                  ? 6
-                  : shape.shapeType == ShapeType.heptagon
-                      ? 7
-                      : 8;
+              ? 6
+              : shape.shapeType == ShapeType.heptagon
+              ? 7
+              : 8;
           polyPath = _createRegularPolygonPath(rect, sides);
         }
         if (fillPaint != null) canvas.drawPath(polyPath, fillPaint);
@@ -183,7 +229,11 @@ class BoardPainter extends CustomPainter {
     }
   }
 
-  Path _createRegularPolygonPath(Rect rect, int sides, {double startAngle = -math.pi / 2}) {
+  static Path _createRegularPolygonPath(
+    Rect rect,
+    int sides, {
+    double startAngle = -math.pi / 2,
+  }) {
     final path = Path();
     final center = rect.center;
     final rx = rect.width / 2;
@@ -203,7 +253,7 @@ class BoardPainter extends CustomPainter {
     return path;
   }
 
-  Path _createStarPath(Rect rect) {
+  static Path _createStarPath(Rect rect) {
     final path = Path();
     final center = rect.center;
     final rOuter = math.min(rect.width, rect.height) / 2;
@@ -224,24 +274,13 @@ class BoardPainter extends CustomPainter {
     return path;
   }
 
-  void _paintText(Canvas canvas, TextObject text) {
-    final textSpan = TextSpan(
-      text: text.text,
-      style: text.style,
-    );
-    final textPainter = TextPainter(
-      text: textSpan,
-      textDirection: TextDirection.ltr,
-    )..layout();
-
-    textPainter.paint(canvas, text.position);
-  }
-
   @override
   bool shouldRepaint(covariant BoardPainter oldDelegate) {
-    return oldDelegate.strokes != strokes ||
-        oldDelegate.shapes != shapes ||
-        oldDelegate.texts != texts ||
-        oldDelegate.selectedIds != selectedIds;
+    // Selection is drawn by SelectionPainter, so it doesn't force a repaint
+    // of the (potentially large) board layer.
+    return !identical(oldDelegate.strokes, strokes) ||
+        !identical(oldDelegate.shapes, shapes) ||
+        !identical(oldDelegate.texts, texts) ||
+        !setEquals(oldDelegate.hiddenIds, hiddenIds);
   }
 }

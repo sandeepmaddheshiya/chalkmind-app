@@ -56,7 +56,10 @@ class MathEvaluator {
         .replaceAll('√', 'sqrt');
 
     // Handle "X% of Y" format (e.g. "15% of 800" -> "(15/100)*800")
-    final percentOfRegex = RegExp(r'(\d+(?:\.\d+)?)\s*%\s*of\s*(\d+(?:\.\d+)?)', caseSensitive: false);
+    final percentOfRegex = RegExp(
+      r'(\d+(?:\.\d+)?)\s*%\s*of\s*(\d+(?:\.\d+)?)',
+      caseSensitive: false,
+    );
     text = text.replaceAllMapped(percentOfRegex, (m) {
       final p = m.group(1)!;
       final val = m.group(2)!;
@@ -70,7 +73,9 @@ class MathEvaluator {
     });
 
     // A solvable arithmetic calculation must contain at least one operation (+, -, *, /, ^, or math function)
-    final hasOp = RegExp(r'[+\-*/^]|sqrt|sin|cos|tan|log|ln|abs').hasMatch(text);
+    final hasOp = RegExp(
+      r'[+\-*/^]|sqrt|sin|cos|tan|log|ln|abs',
+    ).hasMatch(text);
     if (!hasOp) return null;
 
     try {
@@ -80,16 +85,23 @@ class MathEvaluator {
       if (value.isNaN || value.isInfinite) return null;
 
       String formattedResult;
-      if (value == value.roundToDouble() && !value.abs().toString().contains('e')) {
+      if (value == value.roundToDouble() &&
+          !value.abs().toString().contains('e')) {
         formattedResult = value.toInt().toString();
       } else {
         formattedResult = value.toStringAsFixed(4);
         // Trim trailing zeros
         while (formattedResult.endsWith('0')) {
-          formattedResult = formattedResult.substring(0, formattedResult.length - 1);
+          formattedResult = formattedResult.substring(
+            0,
+            formattedResult.length - 1,
+          );
         }
         if (formattedResult.endsWith('.')) {
-          formattedResult = formattedResult.substring(0, formattedResult.length - 1);
+          formattedResult = formattedResult.substring(
+            0,
+            formattedResult.length - 1,
+          );
         }
       }
 
@@ -201,7 +213,9 @@ class _Parser {
       x = _parseFactor();
 
       if (func == 'sqrt') {
-        if (x < 0) throw const FormatException('Square root of negative number');
+        if (x < 0) {
+          throw const FormatException('Square root of negative number');
+        }
         x = math.sqrt(x);
       } else if (func == 'sin') {
         // Teacher math: degrees by default

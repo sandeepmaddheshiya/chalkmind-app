@@ -13,7 +13,9 @@ class BoardTheme {
   static const Color canvasLight = Color(0xFFFFFFFF);
   static const Color canvasWarm = Color(0xFFFBF9F5); // Warm Archival Paper
   static const Color canvasDark = Color(0xFF13151A); // Studio Obsidian
-  static const Color canvasChalkboard = Color(0xFF182A22); // Traditional Chalkboard Green
+  static const Color canvasChalkboard = Color(
+    0xFF182A22,
+  ); // Traditional Chalkboard Green
 
   // Surfaces
   static const Color surfaceDark = Color(0xFF0F1115);

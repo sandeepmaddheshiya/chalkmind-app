@@ -69,9 +69,13 @@ class UniversalMathEngine {
     final bStr = formatNum(b);
     final cStr = formatNum(c);
 
-    steps.add('Equation: ${aStr}x² ${b >= 0 ? '+' : '-'} ${formatNum(b.abs())}x ${c >= 0 ? '+' : '-'} ${formatNum(c.abs())} = 0');
+    steps.add(
+      'Equation: ${aStr}x² ${b >= 0 ? '+' : '-'} ${formatNum(b.abs())}x ${c >= 0 ? '+' : '-'} ${formatNum(c.abs())} = 0',
+    );
     steps.add('Identify coefficients: a = $aStr, b = $bStr, c = $cStr');
-    steps.add('Calculate Discriminant: Δ = b² - 4ac = ($bStr)² - 4($aStr)($cStr) = ${formatNum(disc)}');
+    steps.add(
+      'Calculate Discriminant: Δ = b² - 4ac = ($bStr)² - 4($aStr)($cStr) = ${formatNum(disc)}',
+    );
 
     String resultText;
     final h = -b / (2 * a);
@@ -82,9 +86,15 @@ class UniversalMathEngine {
       final r1 = (-b + sqrtD) / (2 * a);
       final r2 = (-b - sqrtD) / (2 * a);
       steps.add('Since Δ > 0, there are two distinct real roots.');
-      steps.add('Apply formula: x = (-b ± √Δ) / 2a = (-($bStr) ± ${formatNum(sqrtD)}) / (2 · $aStr)');
-      steps.add('x₁ = (-($bStr) + ${formatNum(sqrtD)}) / ${formatNum(2 * a)} = ${formatNum(r1)}');
-      steps.add('x₂ = (-($bStr) - ${formatNum(sqrtD)}) / ${formatNum(2 * a)} = ${formatNum(r2)}');
+      steps.add(
+        'Apply formula: x = (-b ± √Δ) / 2a = (-($bStr) ± ${formatNum(sqrtD)}) / (2 · $aStr)',
+      );
+      steps.add(
+        'x₁ = (-($bStr) + ${formatNum(sqrtD)}) / ${formatNum(2 * a)} = ${formatNum(r1)}',
+      );
+      steps.add(
+        'x₂ = (-($bStr) - ${formatNum(sqrtD)}) / ${formatNum(2 * a)} = ${formatNum(r2)}',
+      );
       steps.add('Parabola Vertex: (h, k) = (${formatNum(h)}, ${formatNum(k)})');
       resultText = 'x = ${formatNum(r1)}  or  x = ${formatNum(r2)}';
     } else if (disc == 0) {
@@ -97,7 +107,9 @@ class UniversalMathEngine {
       final realPart = -b / (2 * a);
       final imagPart = math.sqrt(-disc) / (2 * a.abs());
       steps.add('Since Δ < 0, there are two complex conjugate roots.');
-      steps.add('√Δ = i√(${formatNum(-disc)}) = ${formatNum(math.sqrt(-disc))}i');
+      steps.add(
+        '√Δ = i√(${formatNum(-disc)}) = ${formatNum(math.sqrt(-disc))}i',
+      );
       steps.add('x = ${formatNum(realPart)} ± ${formatNum(imagPart)}i');
       resultText = 'x = ${formatNum(realPart)} ± ${formatNum(imagPart)}i';
     }
@@ -107,7 +119,14 @@ class UniversalMathEngine {
       input: '${aStr}x² + ${bStr}x + $cStr = 0',
       steps: steps,
       result: resultText,
-      data: {'a': a, 'b': b, 'c': c, 'discriminant': disc, 'vertexX': h, 'vertexY': k},
+      data: {
+        'a': a,
+        'b': b,
+        'c': c,
+        'discriminant': disc,
+        'vertexX': h,
+        'vertexY': k,
+      },
     );
   }
 
@@ -122,7 +141,9 @@ class UniversalMathEngine {
     final bStr = formatNum(b);
     final cStr = formatNum(c);
 
-    steps.add('Equation: ${aStr}x ${b >= 0 ? '+' : '-'} ${formatNum(b.abs())} = $cStr');
+    steps.add(
+      'Equation: ${aStr}x ${b >= 0 ? '+' : '-'} ${formatNum(b.abs())} = $cStr',
+    );
 
     if (a == 0) {
       if (b == c) {
@@ -136,16 +157,23 @@ class UniversalMathEngine {
         return StepByStepSolution(
           title: 'Linear Equation Solver',
           input: '$bStr = $cStr',
-          steps: ['0x = ${formatNum(c - b)}', 'Contradiction: no value of x satisfies this equation.'],
+          steps: [
+            '0x = ${formatNum(c - b)}',
+            'Contradiction: no value of x satisfies this equation.',
+          ],
           result: 'No solution',
         );
       }
     }
 
     final rhs = c - b;
-    steps.add('Subtract $bStr from both sides: ${aStr}x = $cStr - ($bStr) = ${formatNum(rhs)}');
+    steps.add(
+      'Subtract $bStr from both sides: ${aStr}x = $cStr - ($bStr) = ${formatNum(rhs)}',
+    );
     final sol = rhs / a;
-    steps.add('Divide both sides by $aStr: x = ${formatNum(rhs)} / $aStr = ${formatNum(sol)}');
+    steps.add(
+      'Divide both sides by $aStr: x = ${formatNum(rhs)} / $aStr = ${formatNum(sol)}',
+    );
 
     return StepByStepSolution(
       title: 'Linear Equation Solver',
@@ -168,19 +196,27 @@ class UniversalMathEngine {
     required double c2,
   }) {
     final steps = <String>[];
-    steps.add('Equation 1: ${formatNum(a1)}x + ${formatNum(b1)}y = ${formatNum(c1)}');
-    steps.add('Equation 2: ${formatNum(a2)}x + ${formatNum(b2)}y = ${formatNum(c2)}');
+    steps.add(
+      'Equation 1: ${formatNum(a1)}x + ${formatNum(b1)}y = ${formatNum(c1)}',
+    );
+    steps.add(
+      'Equation 2: ${formatNum(a2)}x + ${formatNum(b2)}y = ${formatNum(c2)}',
+    );
 
     // Determinants
     final det = a1 * b2 - a2 * b1;
     final detX = c1 * b2 - c2 * b1;
     final detY = a1 * c2 - a2 * c1;
 
-    steps.add('Main Determinant: D = (${formatNum(a1)})(${formatNum(b2)}) - (${formatNum(a2)})(${formatNum(b1)}) = ${formatNum(det)}');
+    steps.add(
+      'Main Determinant: D = (${formatNum(a1)})(${formatNum(b2)}) - (${formatNum(a2)})(${formatNum(b1)}) = ${formatNum(det)}',
+    );
 
     if (det == 0) {
       if (detX == 0 && detY == 0) {
-        steps.add('D = 0 and Dx = Dy = 0: The equations are coincident (same line).');
+        steps.add(
+          'D = 0 and Dx = Dy = 0: The equations are coincident (same line).',
+        );
         return StepByStepSolution(
           title: 'System of Equations Solver (Cramer\'s Rule)',
           input: 'System of 2 Equations',
@@ -198,14 +234,22 @@ class UniversalMathEngine {
       }
     }
 
-    steps.add('X Determinant: Dx = (${formatNum(c1)})(${formatNum(b2)}) - (${formatNum(c2)})(${formatNum(b1)}) = ${formatNum(detX)}');
-    steps.add('Y Determinant: Dy = (${formatNum(a1)})(${formatNum(c2)}) - (${formatNum(a2)})(${formatNum(c1)}) = ${formatNum(detY)}');
+    steps.add(
+      'X Determinant: Dx = (${formatNum(c1)})(${formatNum(b2)}) - (${formatNum(c2)})(${formatNum(b1)}) = ${formatNum(detX)}',
+    );
+    steps.add(
+      'Y Determinant: Dy = (${formatNum(a1)})(${formatNum(c2)}) - (${formatNum(a2)})(${formatNum(c1)}) = ${formatNum(detY)}',
+    );
 
     final x = detX / det;
     final y = detY / det;
 
-    steps.add('Calculate x = Dx / D = ${formatNum(detX)} / ${formatNum(det)} = ${formatNum(x)}');
-    steps.add('Calculate y = Dy / D = ${formatNum(detY)} / ${formatNum(det)} = ${formatNum(y)}');
+    steps.add(
+      'Calculate x = Dx / D = ${formatNum(detX)} / ${formatNum(det)} = ${formatNum(x)}',
+    );
+    steps.add(
+      'Calculate y = Dy / D = ${formatNum(detY)} / ${formatNum(det)} = ${formatNum(y)}',
+    );
 
     return StepByStepSolution(
       title: 'System of Equations Solver (Cramer\'s Rule)',
@@ -221,11 +265,7 @@ class UniversalMathEngine {
   // =========================================================================
 
   /// Solves Pythagorean Theorem for right triangle: a² + b² = c²
-  static StepByStepSolution solvePythagoras({
-    double? a,
-    double? b,
-    double? c,
-  }) {
+  static StepByStepSolution solvePythagoras({double? a, double? b, double? c}) {
     final steps = <String>[];
 
     if (a != null && b != null) {
@@ -237,9 +277,15 @@ class UniversalMathEngine {
 
       steps.add('Given legs: a = ${formatNum(a)}, b = ${formatNum(b)}');
       steps.add('Pythagorean formula: c² = a² + b²');
-      steps.add('Substitute values: c² = (${formatNum(a)})² + (${formatNum(b)})² = ${formatNum(a * a)} + ${formatNum(b * b)} = ${formatNum(cSq)}');
-      steps.add('Calculate hypotenuse: c = √(${formatNum(cSq)}) = ${formatNum(cVal)}');
-      steps.add('Triangle Area = ½ · a · b = ½ · ${formatNum(a)} · ${formatNum(b)} = ${formatNum(area)}');
+      steps.add(
+        'Substitute values: c² = (${formatNum(a)})² + (${formatNum(b)})² = ${formatNum(a * a)} + ${formatNum(b * b)} = ${formatNum(cSq)}',
+      );
+      steps.add(
+        'Calculate hypotenuse: c = √(${formatNum(cSq)}) = ${formatNum(cVal)}',
+      );
+      steps.add(
+        'Triangle Area = ½ · a · b = ½ · ${formatNum(a)} · ${formatNum(b)} = ${formatNum(area)}',
+      );
       steps.add('Perimeter = a + b + c = ${formatNum(perim)}');
 
       return StepByStepSolution(
@@ -263,9 +309,13 @@ class UniversalMathEngine {
       final bVal = math.sqrt(bSq);
       final area = 0.5 * a * bVal;
 
-      steps.add('Given leg a = ${formatNum(a)} and hypotenuse c = ${formatNum(c)}');
+      steps.add(
+        'Given leg a = ${formatNum(a)} and hypotenuse c = ${formatNum(c)}',
+      );
       steps.add('Rearrange formula: b² = c² - a²');
-      steps.add('Substitute values: b² = (${formatNum(c)})² - (${formatNum(a)})² = ${formatNum(c * c)} - ${formatNum(a * a)} = ${formatNum(bSq)}');
+      steps.add(
+        'Substitute values: b² = (${formatNum(c)})² - (${formatNum(a)})² = ${formatNum(c * c)} - ${formatNum(a * a)} = ${formatNum(bSq)}',
+      );
       steps.add('Calculate leg: b = √(${formatNum(bSq)}) = ${formatNum(bVal)}');
       steps.add('Triangle Area = ½ · a · b = ${formatNum(area)}');
 
@@ -290,9 +340,13 @@ class UniversalMathEngine {
       final aVal = math.sqrt(aSq);
       final area = 0.5 * aVal * b;
 
-      steps.add('Given leg b = ${formatNum(b)} and hypotenuse c = ${formatNum(c)}');
+      steps.add(
+        'Given leg b = ${formatNum(b)} and hypotenuse c = ${formatNum(c)}',
+      );
       steps.add('Rearrange formula: a² = c² - b²');
-      steps.add('Substitute values: a² = (${formatNum(c)})² - (${formatNum(b)})² = ${formatNum(c * c)} - ${formatNum(b * b)} = ${formatNum(aSq)}');
+      steps.add(
+        'Substitute values: a² = (${formatNum(c)})² - (${formatNum(b)})² = ${formatNum(c * c)} - ${formatNum(b * b)} = ${formatNum(aSq)}',
+      );
       steps.add('Calculate leg: a = √(${formatNum(aSq)}) = ${formatNum(aVal)}');
       steps.add('Triangle Area = ½ · a · b = ${formatNum(area)}');
 
@@ -308,7 +362,9 @@ class UniversalMathEngine {
     return StepByStepSolution(
       title: 'Pythagorean Theorem Solver',
       input: 'Insufficient parameters',
-      steps: ['Please provide at least 2 sides (either a and b, or a and c, or b and c).'],
+      steps: [
+        'Please provide at least 2 sides (either a and b, or a and c, or b and c).',
+      ],
       result: 'N/A',
     );
   }
@@ -320,11 +376,15 @@ class UniversalMathEngine {
     required double c,
   }) {
     final steps = <String>[];
-    steps.add('Sides: a = ${formatNum(a)}, b = ${formatNum(b)}, c = ${formatNum(c)}');
+    steps.add(
+      'Sides: a = ${formatNum(a)}, b = ${formatNum(b)}, c = ${formatNum(c)}',
+    );
 
     // Triangle inequality check
     if (a + b <= c || a + c <= b || b + c <= a) {
-      steps.add('Triangle inequality failed: sum of any two sides must be strictly greater than the third side.');
+      steps.add(
+        'Triangle inequality failed: sum of any two sides must be strictly greater than the third side.',
+      );
       return StepByStepSolution(
         title: 'Heron\'s Triangle Area Solver',
         input: 'Sides $a, $b, $c',
@@ -341,12 +401,16 @@ class UniversalMathEngine {
     final diffA = s - a;
     final diffB = s - b;
     final diffC = s - c;
-    steps.add('Differences: (s - a) = ${formatNum(diffA)},  (s - b) = ${formatNum(diffB)},  (s - c) = ${formatNum(diffC)}');
+    steps.add(
+      'Differences: (s - a) = ${formatNum(diffA)},  (s - b) = ${formatNum(diffB)},  (s - c) = ${formatNum(diffC)}',
+    );
 
     final rad = s * diffA * diffB * diffC;
     final area = math.sqrt(rad);
     steps.add('Heron\'s Formula: Area = √(s · (s - a) · (s - b) · (s - c))');
-    steps.add('Area = √(${formatNum(s)} · ${formatNum(diffA)} · ${formatNum(diffB)} · ${formatNum(diffC)}) = √(${formatNum(rad)}) = ${formatNum(area)}');
+    steps.add(
+      'Area = √(${formatNum(s)} · ${formatNum(diffA)} · ${formatNum(diffB)} · ${formatNum(diffC)}) = √(${formatNum(rad)}) = ${formatNum(area)}',
+    );
 
     return StepByStepSolution(
       title: 'Heron\'s Triangle Area Solver',
@@ -367,8 +431,12 @@ class UniversalMathEngine {
     final a = math.pi * radius * radius;
 
     steps.add('Diameter: d = 2r = 2 · ${formatNum(radius)} = ${formatNum(d)}');
-    steps.add('Circumference: C = 2πr = 2 · π · ${formatNum(radius)} ≈ ${formatNum(c)}');
-    steps.add('Area: A = πr² = π · (${formatNum(radius)})² = π · ${formatNum(radius * radius)} ≈ ${formatNum(a)}');
+    steps.add(
+      'Circumference: C = 2πr = 2 · π · ${formatNum(radius)} ≈ ${formatNum(c)}',
+    );
+    steps.add(
+      'Area: A = πr² = π · (${formatNum(radius)})² = π · ${formatNum(radius * radius)} ≈ ${formatNum(a)}',
+    );
 
     return StepByStepSolution(
       title: 'Circle Properties Solver',
@@ -388,25 +456,40 @@ class UniversalMathEngine {
     final n = sides;
     final s = sideLength;
 
-    steps.add('Regular Polygon with n = $n sides, side length s = ${formatNum(s)}');
+    steps.add(
+      'Regular Polygon with n = $n sides, side length s = ${formatNum(s)}',
+    );
     final perim = n * s;
-    steps.add('Perimeter: P = n · s = $n · ${formatNum(s)} = ${formatNum(perim)}');
+    steps.add(
+      'Perimeter: P = n · s = $n · ${formatNum(s)} = ${formatNum(perim)}',
+    );
 
     final intAngle = ((n - 2) * 180.0) / n;
-    steps.add('Interior Angle = (n - 2) · 180° / n = ($n - 2) · 180° / $n = ${formatNum(intAngle)}°');
+    steps.add(
+      'Interior Angle = (n - 2) · 180° / n = ($n - 2) · 180° / $n = ${formatNum(intAngle)}°',
+    );
 
     final apothem = s / (2 * math.tan(math.pi / n));
     steps.add('Apothem: a = s / (2 · tan(π/n)) = ${formatNum(apothem)}');
 
     final area = (n * s * s) / (4 * math.tan(math.pi / n));
-    steps.add('Area: A = ½ · P · a = ½ · ${formatNum(perim)} · ${formatNum(apothem)} = ${formatNum(area)}');
+    steps.add(
+      'Area: A = ½ · P · a = ½ · ${formatNum(perim)} · ${formatNum(apothem)} = ${formatNum(area)}',
+    );
 
     return StepByStepSolution(
       title: 'Regular $n-gon Geometry Solver',
       input: 'n = $n sides, s = ${formatNum(s)}',
       steps: steps,
-      result: 'Area ≈ ${formatNum(area)},  Interior Angle = ${formatNum(intAngle)}°',
-      data: {'sides': n, 'sideLength': s, 'perimeter': perim, 'area': area, 'interiorAngle': intAngle},
+      result:
+          'Area ≈ ${formatNum(area)},  Interior Angle = ${formatNum(intAngle)}°',
+      data: {
+        'sides': n,
+        'sideLength': s,
+        'perimeter': perim,
+        'area': area,
+        'interiorAngle': intAngle,
+      },
     );
   }
 
@@ -418,17 +501,23 @@ class UniversalMathEngine {
     required double y2,
   }) {
     final steps = <String>[];
-    steps.add('Point A: (${formatNum(x1)}, ${formatNum(y1)}),  Point B: (${formatNum(x2)}, ${formatNum(y2)})');
+    steps.add(
+      'Point A: (${formatNum(x1)}, ${formatNum(y1)}),  Point B: (${formatNum(x2)}, ${formatNum(y2)})',
+    );
 
     final dx = x2 - x1;
     final dy = y2 - y1;
     final dist = math.sqrt(dx * dx + dy * dy);
     steps.add('Distance formula: d = √((x₂ - x₁)² + (y₂ - y₁)²);');
-    steps.add('d = √((${formatNum(dx)})² + (${formatNum(dy)})²) = √(${formatNum(dx * dx + dy * dy)}) = ${formatNum(dist)}');
+    steps.add(
+      'd = √((${formatNum(dx)})² + (${formatNum(dy)})²) = √(${formatNum(dx * dx + dy * dy)}) = ${formatNum(dist)}',
+    );
 
     final mx = (x1 + x2) / 2;
     final my = (y1 + y2) / 2;
-    steps.add('Midpoint: M = ((x₁ + x₂)/2, (y₁ + y₂)/2) = (${formatNum(mx)}, ${formatNum(my)})');
+    steps.add(
+      'Midpoint: M = ((x₁ + x₂)/2, (y₁ + y₂)/2) = (${formatNum(mx)}, ${formatNum(my)})',
+    );
 
     String slopeStr;
     String eqStr;
@@ -441,18 +530,31 @@ class UniversalMathEngine {
       final slope = dy / dx;
       slopeStr = formatNum(slope);
       final intercept = y1 - slope * x1;
-      steps.add('Slope: m = (y₂ - y₁) / (x₂ - x₁) = ${formatNum(dy)} / ${formatNum(dx)} = $slopeStr');
-      eqStr = 'y = ${slopeStr}x ${intercept >= 0 ? '+' : '-'} ${formatNum(intercept.abs())}';
-      steps.add('Y-Intercept: b = y₁ - m·x₁ = ${formatNum(y1)} - ($slopeStr · ${formatNum(x1)}) = ${formatNum(intercept)}');
+      steps.add(
+        'Slope: m = (y₂ - y₁) / (x₂ - x₁) = ${formatNum(dy)} / ${formatNum(dx)} = $slopeStr',
+      );
+      eqStr =
+          'y = ${slopeStr}x ${intercept >= 0 ? '+' : '-'} ${formatNum(intercept.abs())}';
+      steps.add(
+        'Y-Intercept: b = y₁ - m·x₁ = ${formatNum(y1)} - ($slopeStr · ${formatNum(x1)}) = ${formatNum(intercept)}',
+      );
       steps.add('Equation: $eqStr');
     }
 
     return StepByStepSolution(
       title: 'Coordinate Geometry Solver',
-      input: '(${formatNum(x1)}, ${formatNum(y1)}) to (${formatNum(x2)}, ${formatNum(y2)})',
+      input:
+          '(${formatNum(x1)}, ${formatNum(y1)}) to (${formatNum(x2)}, ${formatNum(y2)})',
       steps: steps,
-      result: 'Distance = ${formatNum(dist)},  Midpoint = (${formatNum(mx)}, ${formatNum(my)})',
-      data: {'distance': dist, 'midpointX': mx, 'midpointY': my, 'slope': slopeStr, 'equation': eqStr},
+      result:
+          'Distance = ${formatNum(dist)},  Midpoint = (${formatNum(mx)}, ${formatNum(my)})',
+      data: {
+        'distance': dist,
+        'midpointX': mx,
+        'midpointY': my,
+        'slope': slopeStr,
+        'equation': eqStr,
+      },
     );
   }
 
@@ -467,17 +569,25 @@ class UniversalMathEngine {
     required double angleCDeg,
   }) {
     final steps = <String>[];
-    steps.add('Given: side a = ${formatNum(a)}, side b = ${formatNum(b)}, included angle C = ${formatNum(angleCDeg)}°');
+    steps.add(
+      'Given: side a = ${formatNum(a)}, side b = ${formatNum(b)}, included angle C = ${formatNum(angleCDeg)}°',
+    );
 
     final rad = angleCDeg * (math.pi / 180.0);
     final cosC = math.cos(rad);
-    steps.add('Convert angle to radians: C ≈ ${formatNum(rad)} rad,  cos(C) ≈ ${formatNum(cosC)}');
+    steps.add(
+      'Convert angle to radians: C ≈ ${formatNum(rad)} rad,  cos(C) ≈ ${formatNum(cosC)}',
+    );
 
     final cSq = a * a + b * b - 2 * a * b * cosC;
     final cVal = math.sqrt(math.max(0, cSq));
     steps.add('Law of Cosines: c² = a² + b² - 2ab·cos(C)');
-    steps.add('c² = (${formatNum(a)})² + (${formatNum(b)})² - 2(${formatNum(a)})(${formatNum(b)})(${formatNum(cosC)})');
-    steps.add('c² = ${formatNum(a * a)} + ${formatNum(b * b)} - ${formatNum(2 * a * b * cosC)} = ${formatNum(cSq)}');
+    steps.add(
+      'c² = (${formatNum(a)})² + (${formatNum(b)})² - 2(${formatNum(a)})(${formatNum(b)})(${formatNum(cosC)})',
+    );
+    steps.add(
+      'c² = ${formatNum(a * a)} + ${formatNum(b * b)} - ${formatNum(2 * a * b * cosC)} = ${formatNum(cSq)}',
+    );
     steps.add('c = √(${formatNum(cSq)}) ≈ ${formatNum(cVal)}');
 
     final area = 0.5 * a * b * math.sin(rad);
@@ -485,7 +595,8 @@ class UniversalMathEngine {
 
     return StepByStepSolution(
       title: 'Law of Cosines Solver',
-      input: 'a = ${formatNum(a)}, b = ${formatNum(b)}, C = ${formatNum(angleCDeg)}°',
+      input:
+          'a = ${formatNum(a)}, b = ${formatNum(b)}, C = ${formatNum(angleCDeg)}°',
       steps: steps,
       result: 'Side c ≈ ${formatNum(cVal)},  Area ≈ ${formatNum(area)}',
       data: {'a': a, 'b': b, 'c': cVal, 'angleC': angleCDeg, 'area': area},
@@ -499,7 +610,9 @@ class UniversalMathEngine {
     required double angleBDeg,
   }) {
     final steps = <String>[];
-    steps.add('Given: side a = ${formatNum(a)}, angle A = ${formatNum(angleADeg)}°, angle B = ${formatNum(angleBDeg)}°');
+    steps.add(
+      'Given: side a = ${formatNum(a)}, angle A = ${formatNum(angleADeg)}°, angle B = ${formatNum(angleBDeg)}°',
+    );
 
     final angleCDeg = 180.0 - angleADeg - angleBDeg;
     if (angleCDeg <= 0) {
@@ -511,7 +624,9 @@ class UniversalMathEngine {
       );
     }
 
-    steps.add('Third Angle: C = 180° - (A + B) = 180° - (${formatNum(angleADeg)}° + ${formatNum(angleBDeg)}°) = ${formatNum(angleCDeg)}°');
+    steps.add(
+      'Third Angle: C = 180° - (A + B) = 180° - (${formatNum(angleADeg)}° + ${formatNum(angleBDeg)}°) = ${formatNum(angleCDeg)}°',
+    );
 
     final radA = angleADeg * (math.pi / 180.0);
     final radB = angleBDeg * (math.pi / 180.0);
@@ -524,16 +639,31 @@ class UniversalMathEngine {
     final b = a * (sinB / sinA);
     final c = a * (sinC / sinA);
 
-    steps.add('Law of Sines ratio: a / sin(A) = ${formatNum(a)} / ${formatNum(sinA)} ≈ ${formatNum(a / sinA)}');
-    steps.add('Side b = a · sin(B) / sin(A) = ${formatNum(a)} · ${formatNum(sinB)} / ${formatNum(sinA)} ≈ ${formatNum(b)}');
-    steps.add('Side c = a · sin(C) / sin(A) = ${formatNum(a)} · ${formatNum(sinC)} / ${formatNum(sinA)} ≈ ${formatNum(c)}');
+    steps.add(
+      'Law of Sines ratio: a / sin(A) = ${formatNum(a)} / ${formatNum(sinA)} ≈ ${formatNum(a / sinA)}',
+    );
+    steps.add(
+      'Side b = a · sin(B) / sin(A) = ${formatNum(a)} · ${formatNum(sinB)} / ${formatNum(sinA)} ≈ ${formatNum(b)}',
+    );
+    steps.add(
+      'Side c = a · sin(C) / sin(A) = ${formatNum(a)} · ${formatNum(sinC)} / ${formatNum(sinA)} ≈ ${formatNum(c)}',
+    );
 
     return StepByStepSolution(
       title: 'Law of Sines Solver',
-      input: 'a = ${formatNum(a)}, A = ${formatNum(angleADeg)}°, B = ${formatNum(angleBDeg)}°',
+      input:
+          'a = ${formatNum(a)}, A = ${formatNum(angleADeg)}°, B = ${formatNum(angleBDeg)}°',
       steps: steps,
-      result: 'b ≈ ${formatNum(b)},  c ≈ ${formatNum(c)},  C = ${formatNum(angleCDeg)}°',
-      data: {'a': a, 'b': b, 'c': c, 'angleA': angleADeg, 'angleB': angleBDeg, 'angleC': angleCDeg},
+      result:
+          'b ≈ ${formatNum(b)},  c ≈ ${formatNum(c)},  C = ${formatNum(angleCDeg)}°',
+      data: {
+        'a': a,
+        'b': b,
+        'c': c,
+        'angleA': angleADeg,
+        'angleB': angleBDeg,
+        'angleC': angleCDeg,
+      },
     );
   }
 
@@ -554,11 +684,15 @@ class UniversalMathEngine {
     final diffTerms = <_PolyTerm>[];
     for (final term in terms) {
       if (term.power == 0) {
-        steps.add('d/dx [${formatNum(term.coeff)}] = 0  (derivative of a constant is 0)');
+        steps.add(
+          'd/dx [${formatNum(term.coeff)}] = 0  (derivative of a constant is 0)',
+        );
       } else {
         final newCoeff = term.coeff * term.power;
         final newPower = term.power - 1;
-        steps.add('d/dx [${_formatTerm(term.coeff, term.power)}] = ${formatNum(term.coeff)} · ${term.power} · x^${term.power - 1} = ${_formatTerm(newCoeff, newPower)}');
+        steps.add(
+          'd/dx [${_formatTerm(term.coeff, term.power)}] = ${formatNum(term.coeff)} · ${term.power} · x^${term.power - 1} = ${_formatTerm(newCoeff, newPower)}',
+        );
         diffTerms.add(_PolyTerm(coeff: newCoeff, power: newPower));
       }
     }
@@ -570,7 +704,9 @@ class UniversalMathEngine {
     final secondDiffTerms = <_PolyTerm>[];
     for (final term in diffTerms) {
       if (term.power > 0) {
-        secondDiffTerms.add(_PolyTerm(coeff: term.coeff * term.power, power: term.power - 1));
+        secondDiffTerms.add(
+          _PolyTerm(coeff: term.coeff * term.power, power: term.power - 1),
+        );
       }
     }
     final secondDiffStr = _formatPolynomial(secondDiffTerms);
@@ -596,13 +732,17 @@ class UniversalMathEngine {
 
     final steps = <String>[];
     steps.add('Integrand: f(x) = $clean');
-    steps.add('Apply Reverse Power Rule term-by-term: ∫ c · xⁿ dx = (c / (n + 1)) · xⁿ⁺¹');
+    steps.add(
+      'Apply Reverse Power Rule term-by-term: ∫ c · xⁿ dx = (c / (n + 1)) · xⁿ⁺¹',
+    );
 
     final intTerms = <_PolyTerm>[];
     for (final term in terms) {
       final newPower = term.power + 1;
       final newCoeff = term.coeff / newPower;
-      steps.add('∫ [${_formatTerm(term.coeff, term.power)}] dx = (${formatNum(term.coeff)} / $newPower) · x^$newPower = ${_formatTerm(newCoeff, newPower)}');
+      steps.add(
+        '∫ [${_formatTerm(term.coeff, term.power)}] dx = (${formatNum(term.coeff)} / $newPower) · x^$newPower = ${_formatTerm(newCoeff, newPower)}',
+      );
       intTerms.add(_PolyTerm(coeff: newCoeff, power: newPower));
     }
 
@@ -613,7 +753,9 @@ class UniversalMathEngine {
 
     if (lowerLimit != null && upperLimit != null) {
       steps.add('── Definite Integral Evaluation ──');
-      steps.add('Limits: a = ${formatNum(lowerLimit)}, b = ${formatNum(upperLimit)}');
+      steps.add(
+        'Limits: a = ${formatNum(lowerLimit)}, b = ${formatNum(upperLimit)}',
+      );
       steps.add('Fundamental Theorem of Calculus: ∫ₐᵇ f(x) dx = F(b) - F(a)');
 
       final valB = _evaluatePolynomialTerms(intTerms, upperLimit);
@@ -622,13 +764,17 @@ class UniversalMathEngine {
 
       steps.add('F(${formatNum(upperLimit)}) = ${formatNum(valB)}');
       steps.add('F(${formatNum(lowerLimit)}) = ${formatNum(valA)}');
-      steps.add('Net Result = ${formatNum(valB)} - (${formatNum(valA)}) = ${formatNum(netVal)}');
+      steps.add(
+        'Net Result = ${formatNum(valB)} - (${formatNum(valA)}) = ${formatNum(netVal)}',
+      );
 
       finalResult = formatNum(netVal);
     }
 
     return StepByStepSolution(
-      title: lowerLimit != null ? 'Definite Integral Solver' : 'Symbolic Indefinite Integral',
+      title: lowerLimit != null
+          ? 'Definite Integral Solver'
+          : 'Symbolic Indefinite Integral',
       input: '∫ $clean dx',
       steps: steps,
       result: finalResult,
@@ -838,7 +984,7 @@ class UniversalMathEngine {
       final c = int.parse(m8.group(3)!);
       final twoC = 2 * c;
       final c2 = c * c;
-      return '$v² $sign ${twoC}$v + $c2';
+      return '$v² $sign $twoC$v + $c2';
     }
 
     // 9. Cube of Binomial: (a + b)^3 or (a - b)^3
@@ -866,14 +1012,17 @@ class UniversalMathEngine {
       final threeC2 = 3 * c * c;
       final c3 = c * c * c;
       if (sign == '+') {
-        return '$v³ + ${threeC}$v² + ${threeC2}$v + $c3';
+        return '$v³ + $threeC$v² + $threeC2$v + $c3';
       } else {
-        return '$v³ - ${threeC}$v² + ${threeC2}$v - $c3';
+        return '$v³ - $threeC$v² + $threeC2$v - $c3';
       }
     }
 
     // 11. Trigonometric identities
-    if (norm == 'sin^2(x)+cos^2(x)' || norm == 'sin^2x+cos^2x' || norm == 'cos^2(x)+sin^2(x)' || norm == 'cos^2x+sin^2x') {
+    if (norm == 'sin^2(x)+cos^2(x)' ||
+        norm == 'sin^2x+cos^2x' ||
+        norm == 'cos^2(x)+sin^2(x)' ||
+        norm == 'cos^2x+sin^2x') {
       return '1';
     }
     if (norm == '1+tan^2(x)' || norm == '1+tan^2x') {
@@ -945,12 +1094,18 @@ class UniversalMathEngine {
   }
 
   /// Generates pedagogical step-by-step mathematical reasoning and explanation for any expression
-  static MathSolutionDetails getStepsAndExplanation(String expression, String answer) {
+  static MathSolutionDetails getStepsAndExplanation(
+    String expression,
+    String answer,
+  ) {
     final cleanExpr = expression.replaceAll('=', '').trim();
     final norm = cleanExpr.toLowerCase().replaceAll(' ', '');
 
     // 1. Difference of Cubes: a^3 - b^3
-    if (norm == 'a^3-b^3' || norm == 'a³-b³' || norm == 'x^3-y^3' || norm == 'x³-y³') {
+    if (norm == 'a^3-b^3' ||
+        norm == 'a³-b³' ||
+        norm == 'x^3-y^3' ||
+        norm == 'x³-y³') {
       final v1 = norm.contains('a') ? 'a' : 'x';
       final v2 = norm.contains('b') ? 'b' : 'y';
       return MathSolutionDetails(
@@ -961,12 +1116,16 @@ class UniversalMathEngine {
           'Form the quadratic factor with positive cross-product: ($v1² + $v1$v2 + $v2²).',
           'Combine factors: $answer.',
         ],
-        explanation: 'Factoring a difference of cubes splits the expression into a real linear factor ($v1 - $v2) and an irreducible quadratic factor ($v1² + $v1$v2 + $v2²).',
+        explanation:
+            'Factoring a difference of cubes splits the expression into a real linear factor ($v1 - $v2) and an irreducible quadratic factor ($v1² + $v1$v2 + $v2²).',
       );
     }
 
     // 2. Sum of Cubes: a^3 + b^3
-    if (norm == 'a^3+b^3' || norm == 'a³+b³' || norm == 'x^3+y^3' || norm == 'x³+y³') {
+    if (norm == 'a^3+b^3' ||
+        norm == 'a³+b³' ||
+        norm == 'x^3+y^3' ||
+        norm == 'x³+y³') {
       final v1 = norm.contains('a') ? 'a' : 'x';
       final v2 = norm.contains('b') ? 'b' : 'y';
       return MathSolutionDetails(
@@ -977,7 +1136,8 @@ class UniversalMathEngine {
           'Form the quadratic factor with negative cross-product: ($v1² - $v1$v2 + $v2²).',
           'Combine factors: $answer.',
         ],
-        explanation: 'Factoring a sum of cubes decomposes the cubic polynomial using alternating sign identities.',
+        explanation:
+            'Factoring a sum of cubes decomposes the cubic polynomial using alternating sign identities.',
       );
     }
 
@@ -989,7 +1149,8 @@ class UniversalMathEngine {
           'Determine the square root of each term.',
           'Multiply the sum and difference conjugate binomials: $answer.',
         ],
-        explanation: 'The difference between any two squares factors into the product of their sum and difference.',
+        explanation:
+            'The difference between any two squares factors into the product of their sum and difference.',
       );
     }
 
@@ -1003,12 +1164,16 @@ class UniversalMathEngine {
           'Square the second term.',
           'Combine terms: $answer.',
         ],
-        explanation: 'Squaring a binomial produces a perfect square trinomial containing the doubled cross-product.',
+        explanation:
+            'Squaring a binomial produces a perfect square trinomial containing the doubled cross-product.',
       );
     }
 
     // 5. Pythagorean Theorem: x = √(3² + 4²) = 5
-    if (cleanExpr.contains('√') || cleanExpr.contains('sqrt') || cleanExpr.contains('a^2 + b^2') || (cleanExpr.contains('3') && cleanExpr.contains('4'))) {
+    if (cleanExpr.contains('√') ||
+        cleanExpr.contains('sqrt') ||
+        cleanExpr.contains('a^2 + b^2') ||
+        (cleanExpr.contains('3') && cleanExpr.contains('4'))) {
       return MathSolutionDetails(
         steps: [
           'State Pythagorean Theorem for right-angled triangles: a² + b² = c².',
@@ -1016,7 +1181,8 @@ class UniversalMathEngine {
           'Calculate the sum of squares: 3² + 4² = 9 + 16 = 25.',
           'Take the principal square root: c = √25 = $answer.',
         ],
-        explanation: 'In any right-angled triangle, the square of the hypotenuse is equal to the sum of the squares of the other two legs.',
+        explanation:
+            'In any right-angled triangle, the square of the hypotenuse is equal to the sum of the squares of the other two legs.',
       );
     }
 
@@ -1028,7 +1194,8 @@ class UniversalMathEngine {
           'Apply standard differentiation rules (e.g. power rule d/dx(xⁿ) = n·xⁿ⁻¹ or trigonometric rules).',
           'Evaluate derivative: $answer.',
         ],
-        explanation: 'The derivative measures the instantaneous rate of change or tangent slope of the function.',
+        explanation:
+            'The derivative measures the instantaneous rate of change or tangent slope of the function.',
       );
     }
 

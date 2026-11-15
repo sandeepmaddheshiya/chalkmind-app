@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' show Rect;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:boardflow/features/whiteboard/models/stroke_model.dart';
 import 'package:boardflow/features/whiteboard/models/stroke_point.dart';
@@ -1213,6 +1214,73 @@ void main() {
       for (final s in strokes) {
         expect(s.points, isNotEmpty);
       }
+    });
+
+    test('Handwritten digits are smooth curves, not angular polygons', () {
+      // The old generator joined a few points with straight lines, so "8"
+      // looked like two tilted boxes (8 corners). Curved digits may only have
+      // the corners real handwriting has.
+      const allowedCorners = {'0': 0, '6': 0, '8': 0, '2': 1, '3': 1, '9': 1};
+      for (final entry in allowedCorners.entries) {
+        final strokes = HandwritingStrokeGenerator.generateHandwrittenStrokes(
+          text: entry.key,
+          startPosition: const Offset(100, 100),
+          characterHeight: 60,
+          colorValue: 0xFF000000,
+          strokeWidth: 3,
+        );
+        final curve = strokes.reduce((a, b) => a.points.length >= b.points.length ? a : b);
+        final pts = curve.points.map((p) => p.offset).toList();
+        expect(pts.length, greaterThan(30), reason: '${entry.key} is densely sampled');
+        int corners = 0;
+        bool inCorner = false;
+        for (int i = 2; i + 2 < pts.length; i++) {
+          final a = pts[i] - pts[i - 2], b = pts[i + 2] - pts[i];
+          if (a.distance < 0.5 || b.distance < 0.5) continue;
+          final cos = ((a.dx * b.dx + a.dy * b.dy) / (a.distance * b.distance)).clamp(-1.0, 1.0);
+          final sharp = math.acos(cos) * 180 / math.pi > 40;
+          if (sharp && !inCorner) corners++;
+          inCorner = sharp;
+        }
+        expect(corners, lessThanOrEqualTo(entry.value),
+            reason: '"${entry.key}" has $corners sharp corners (allowed ${entry.value})');
+      }
+    });
+
+    test('Handwritten answers sit on the writer\'s line, at their size and angle', () {
+      const h = 50.0;
+      final strokes = HandwritingStrokeGenerator.generateHandwrittenStrokes(
+        text: '10',
+        startPosition: const Offset(200, 300),
+        characterHeight: h,
+        colorValue: 0xFF000000,
+        strokeWidth: 3,
+      );
+      Rect? b;
+      for (final s in strokes) {
+        for (final p in s.points) {
+          b = b == null ? Rect.fromLTWH(p.x, p.y, 0, 0) : b.expandToInclude(Rect.fromLTWH(p.x, p.y, 0, 0));
+        }
+      }
+      expect(b!.top, closeTo(300, h * 0.1));
+      expect(b.bottom, closeTo(300 + h, h * 0.1), reason: 'digits rest on the baseline');
+      expect(b.left, greaterThanOrEqualTo(199));
+
+      // Written along a 20° slant when the teacher's line is slanted.
+      final d = Offset(math.cos(0.35), math.sin(0.35));
+      final slanted = HandwritingStrokeGenerator.generateHandwrittenStrokes(
+        text: '11',
+        startPosition: Offset.zero,
+        characterHeight: h,
+        colorValue: 0,
+        strokeWidth: 3,
+        direction: d,
+        normal: Offset(-d.dy, d.dx),
+      );
+      final firstOne = slanted.first.points.last.offset; // bottom of first '1'
+      final secondOne = slanted.last.points.last.offset; // bottom of second '1'
+      final along = secondOne - firstOne;
+      expect(math.atan2(along.dy, along.dx), closeTo(0.35, 0.12));
     });
 
     test('Generates pedagogical steps and theoretical explanation for a^3 - b^3', () {

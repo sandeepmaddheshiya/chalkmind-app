@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../recognition/math_function_parser.dart';
 import '../state/whiteboard_notifier.dart';
+import 'ai_recognition_settings_dialog.dart';
 
 class MathSuggestionOverlay extends ConsumerWidget {
   const MathSuggestionOverlay({super.key});
@@ -23,7 +25,9 @@ class MathSuggestionOverlay extends ConsumerWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(30),
               border: Border.all(
-                color: isDark ? const Color(0xFF374151) : const Color(0xFFE5E7EB),
+                color: isDark
+                    ? const Color(0xFF374151)
+                    : const Color(0xFFE5E7EB),
                 width: 1.2,
               ),
             ),
@@ -35,7 +39,9 @@ class MathSuggestionOverlay extends ConsumerWidget {
                   height: 14,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF059669)),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      Color(0xFF059669),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -46,6 +52,64 @@ class MathSuggestionOverlay extends ConsumerWidget {
                     color: isDark ? Colors.white70 : Colors.black87,
                     fontWeight: FontWeight.w500,
                   ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final aiError = state.aiErrorMessage;
+    if (aiError != null && mathResult == null && !state.isCalculatingMath) {
+      return Center(
+        child: Material(
+          elevation: 8,
+          borderRadius: BorderRadius.circular(16),
+          color: isDark ? const Color(0xFF2A1215) : const Color(0xFFFEF2F2),
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 520),
+            padding: const EdgeInsets.fromLTRB(14, 6, 4, 6),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFFCA5A5)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.error_outline_rounded,
+                  size: 18,
+                  color: Color(0xFFDC2626),
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    aiError,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: isDark
+                          ? const Color(0xFFFECACA)
+                          : const Color(0xFF991B1B),
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    ref
+                        .read(whiteboardControllerProvider.notifier)
+                        .dismissAiError();
+                    AiRecognitionSettingsDialog.show(context);
+                  },
+                  child: const Text('Settings'),
+                ),
+                IconButton(
+                  tooltip: 'Dismiss',
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.close_rounded, size: 16),
+                  onPressed: () => ref
+                      .read(whiteboardControllerProvider.notifier)
+                      .dismissAiError(),
                 ),
               ],
             ),
@@ -83,7 +147,9 @@ class MathSuggestionOverlay extends ConsumerWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(30),
               border: Border.all(
-                color: isDark ? const Color(0xFF374151) : const Color(0xFFE5E7EB),
+                color: isDark
+                    ? const Color(0xFF374151)
+                    : const Color(0xFFE5E7EB),
                 width: 1.2,
               ),
             ),
@@ -133,46 +199,112 @@ class MathSuggestionOverlay extends ConsumerWidget {
                   FilledButton.icon(
                     style: FilledButton.styleFrom(
                       backgroundColor: const Color(0xFF059669),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      minimumSize: const Size(0, 34),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      minimumSize: const Size(0, 32),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(16),
                       ),
                     ),
-                    icon: const Icon(Icons.draw_rounded, size: 16),
+                    icon: const Icon(Icons.draw_rounded, size: 15),
                     label: Text(
                       answerDisplay,
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     onPressed: () {
-                      ref.read(whiteboardControllerProvider.notifier).acceptHandwrittenMath();
+                      ref
+                          .read(whiteboardControllerProvider.notifier)
+                          .acceptHandwrittenMath();
                     },
                   ),
 
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
 
                   // Step-by-Step Explanation Button
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: isDark ? Colors.white70 : const Color(0xFF1E3A8A),
+                      foregroundColor: isDark
+                          ? Colors.white70
+                          : const Color(0xFF1E3A8A),
                       side: BorderSide(
-                        color: isDark ? Colors.white24 : const Color(0xFF93C5FD),
+                        color: isDark
+                            ? Colors.white24
+                            : const Color(0xFF93C5FD),
                       ),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      minimumSize: const Size(0, 34),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 6,
+                      ),
+                      minimumSize: const Size(0, 32),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(16),
                       ),
                     ),
-                    icon: const Icon(Icons.auto_stories_outlined, size: 16),
+                    icon: const Icon(Icons.auto_stories_outlined, size: 15),
                     label: const Text(
                       'Steps',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     onPressed: () {
                       _showStepByStepDialog(context, ref, mathResult);
                     },
                   ),
+
+                  // Desmos-Style Function Graph Plotter Button
+                  if (MathFunctionParser.isGraphable(mathResult.expression) ||
+                      MathFunctionParser.isGraphable(mathResult.answer) ||
+                      MathFunctionParser.isGraphable(
+                        '${mathResult.expression} ${mathResult.answer}',
+                      )) ...[
+                    const SizedBox(width: 6),
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF2563EB),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        minimumSize: const Size(0, 32),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      icon: const Icon(Icons.show_chart_rounded, size: 15),
+                      label: const Text(
+                        'Plot on Graph',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      onPressed: () {
+                        final expr = mathResult.expression.trim();
+                        final ans = mathResult.answer.trim();
+                        final eq = MathFunctionParser.isGraphable(expr)
+                            ? expr
+                            : (MathFunctionParser.isGraphable(ans)
+                                  ? ans
+                                  : '$expr $ans');
+                        ref
+                            .read(whiteboardControllerProvider.notifier)
+                            .plotEquation(
+                              eq,
+                              position: mathResult.suggestedWritePosition,
+                            );
+                        ref
+                            .read(whiteboardControllerProvider.notifier)
+                            .dismissHandwrittenMath();
+                      },
+                    ),
+                  ],
 
                   const SizedBox(width: 6),
 
@@ -181,7 +313,9 @@ class MathSuggestionOverlay extends ConsumerWidget {
                     icon: const Icon(Icons.close_rounded, size: 18),
                     tooltip: 'Dismiss',
                     onPressed: () {
-                      ref.read(whiteboardControllerProvider.notifier).dismissHandwrittenMath();
+                      ref
+                          .read(whiteboardControllerProvider.notifier)
+                          .dismissHandwrittenMath();
                     },
                   ),
                 ],
@@ -206,7 +340,9 @@ class MathSuggestionOverlay extends ConsumerWidget {
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           titlePadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
           contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
           title: Row(
@@ -244,7 +380,9 @@ class MathSuggestionOverlay extends ConsumerWidget {
                     width: double.infinity,
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF0FDF4),
+                      color: isDark
+                          ? const Color(0xFF1E293B)
+                          : const Color(0xFFF0FDF4),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: const Color(0xFF059669).withValues(alpha: 0.3),
@@ -279,7 +417,10 @@ class MathSuggestionOverlay extends ConsumerWidget {
                   if (steps.isNotEmpty) ...[
                     const Text(
                       'Solution Steps:',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     for (int i = 0; i < steps.length; i++)
@@ -293,7 +434,9 @@ class MathSuggestionOverlay extends ConsumerWidget {
                               height: 24,
                               margin: const EdgeInsets.only(top: 2, right: 10),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF1E3A8A).withValues(alpha: 0.12),
+                                color: const Color(
+                                  0xFF1E3A8A,
+                                ).withValues(alpha: 0.12),
                                 shape: BoxShape.circle,
                               ),
                               child: Center(
@@ -310,7 +453,10 @@ class MathSuggestionOverlay extends ConsumerWidget {
                             Expanded(
                               child: Text(
                                 steps[i],
-                                style: const TextStyle(fontSize: 13, height: 1.4),
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  height: 1.4,
+                                ),
                               ),
                             ),
                           ],
@@ -319,7 +465,10 @@ class MathSuggestionOverlay extends ConsumerWidget {
                   ] else ...[
                     const Text(
                       'Direct Evaluation:',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     Text(
@@ -335,10 +484,14 @@ class MathSuggestionOverlay extends ConsumerWidget {
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFEFF6FF),
+                        color: isDark
+                            ? const Color(0xFF0F172A)
+                            : const Color(0xFFEFF6FF),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                          color: const Color(0xFF3B82F6).withValues(alpha: 0.25),
+                          color: const Color(
+                            0xFF3B82F6,
+                          ).withValues(alpha: 0.25),
                         ),
                       ),
                       child: Row(
@@ -356,7 +509,9 @@ class MathSuggestionOverlay extends ConsumerWidget {
                               style: TextStyle(
                                 fontSize: 12,
                                 height: 1.4,
-                                color: isDark ? Colors.white70 : const Color(0xFF1E3A8A),
+                                color: isDark
+                                    ? Colors.white70
+                                    : const Color(0xFF1E3A8A),
                               ),
                             ),
                           ),
@@ -375,9 +530,41 @@ class MathSuggestionOverlay extends ConsumerWidget {
               label: const Text('Insert Steps on Board'),
               onPressed: () {
                 Navigator.of(ctx).pop();
-                ref.read(whiteboardControllerProvider.notifier).insertMathSteps(mathResult);
+                ref
+                    .read(whiteboardControllerProvider.notifier)
+                    .insertMathSteps(mathResult);
               },
             ),
+
+            // Plot on Graph (if graphable function)
+            if (MathFunctionParser.isGraphable(mathResult.expression) ||
+                MathFunctionParser.isGraphable(mathResult.answer) ||
+                MathFunctionParser.isGraphable(
+                  '${mathResult.expression} ${mathResult.answer}',
+                ))
+              FilledButton.tonalIcon(
+                icon: const Icon(Icons.show_chart_rounded, size: 16),
+                label: const Text('Plot on Graph'),
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  final expr = mathResult.expression.trim();
+                  final ans = mathResult.answer.trim();
+                  final eq = MathFunctionParser.isGraphable(expr)
+                      ? expr
+                      : (MathFunctionParser.isGraphable(ans)
+                            ? ans
+                            : '$expr $ans');
+                  ref
+                      .read(whiteboardControllerProvider.notifier)
+                      .plotEquation(
+                        eq,
+                        position: mathResult.suggestedWritePosition,
+                      );
+                  ref
+                      .read(whiteboardControllerProvider.notifier)
+                      .dismissHandwrittenMath();
+                },
+              ),
 
             // Write Answer on Canvas
             FilledButton.icon(
@@ -388,7 +575,9 @@ class MathSuggestionOverlay extends ConsumerWidget {
               label: Text('Write "${mathResult.answer}"'),
               onPressed: () {
                 Navigator.of(ctx).pop();
-                ref.read(whiteboardControllerProvider.notifier).acceptHandwrittenMath();
+                ref
+                    .read(whiteboardControllerProvider.notifier)
+                    .acceptHandwrittenMath();
               },
             ),
 

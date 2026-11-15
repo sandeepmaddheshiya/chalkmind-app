@@ -8,6 +8,7 @@ enum CanvasZoomAction {
   zoomIn,
   zoomOut,
   reset,
+  fitContent,
   panLeft,
   panRight,
   panUp,
@@ -29,8 +30,8 @@ class CanvasZoomActionNotifier extends Notifier<CanvasZoomAction> {
 
 final canvasZoomActionProvider =
     NotifierProvider<CanvasZoomActionNotifier, CanvasZoomAction>(
-  () => CanvasZoomActionNotifier(),
-);
+      () => CanvasZoomActionNotifier(),
+    );
 
 /// Floating zoom & pan controls for the whiteboard canvas (especially useful in Infinite Canvas mode)
 class CanvasZoomControls extends ConsumerWidget {
@@ -87,8 +88,10 @@ class CanvasZoomControls extends ConsumerWidget {
               child: Tooltip(
                 message: 'Reset Zoom (100%)',
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: isDark ? Colors.white10 : const Color(0xFFF3F4F6),
                     borderRadius: BorderRadius.circular(12),

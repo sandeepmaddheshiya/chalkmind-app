@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../canvas/whiteboard_canvas.dart';
+import '../models/tool_type.dart';
+import 'ai_assistant_panel.dart';
+import 'canvas_zoom_controls.dart';
 import '../state/whiteboard_notifier.dart';
 import 'ai_recognition_settings_dialog.dart';
-import 'canvas_zoom_controls.dart';
 import 'export_dialog.dart';
-import 'math_calculator_dialog.dart';
 import 'math_suggestion_overlay.dart';
-import 'page_strip_widget.dart';
-import 'selection_action_overlay.dart';
+import 'pdf_lookup_overlay.dart';
+import '../pdf/pdf_import_flow.dart';
 import 'shape_suggestion_overlay.dart';
 import 'tool_properties_panel.dart';
 import 'toolbar_widget.dart';
@@ -22,9 +24,295 @@ class WhiteboardScreen extends ConsumerStatefulWidget {
 }
 
 class _WhiteboardScreenState extends ConsumerState<WhiteboardScreen> {
+  final FocusNode _boardFocus = FocusNode(debugLabel: 'whiteboard');
+  bool _isAssistantOpen = false;
+  ToolType? _toolBeforeSpacePan;
+  bool _isLeaving = false;
   bool _isPropertiesOpen = false;
   bool _isToolbarVisible = true;
   Offset? _toolbarPosition;
+
+  @override
+  void dispose() {
+    _boardFocus.dispose();
+    super.dispose();
+  }
+
+  /// Saves, reporting failure. Returns true when saved.
+  Future<bool> _save({bool showSuccess = false}) async {
+    try {
+      await ref.read(whiteboardControllerProvider.notifier).saveProject();
+      if (showSuccess && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Board saved'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
+      return true;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not save the board: $e'),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+      }
+      return false;
+    }
+  }
+
+  /// Leaves the board after saving. If saving fails the user is asked
+  /// whether to leave anyway (the crash-recovery draft is kept).
+  Future<void> _leave() async {
+    if (_isLeaving) return;
+    _isLeaving = true;
+    final saved = await _save();
+    if (!mounted) return;
+    if (!saved) {
+      final leave = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Leave without saving?'),
+          content: const Text(
+            'The board could not be saved. Your latest changes are kept as a recovery draft you can restore from the home screen.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Stay'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Leave'),
+            ),
+          ],
+        ),
+      );
+      if (leave != true || !mounted) {
+        _isLeaving = false;
+        return;
+      }
+    }
+    Navigator.of(context).pop();
+  }
+
+  bool get _isTyping {
+    final ctx = FocusManager.instance.primaryFocus?.context;
+    if (ctx == null) return false;
+    return ctx.widget is EditableText ||
+        ctx.findAncestorStateOfType<EditableTextState>() != null;
+  }
+
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    final notifier = ref.read(whiteboardControllerProvider.notifier);
+    final key = event.logicalKey;
+
+    // Hold Space to pan temporarily.
+    if (key == LogicalKeyboardKey.space && !_isTyping) {
+      if (event is KeyDownEvent && _toolBeforeSpacePan == null) {
+        final current = ref.read(whiteboardControllerProvider).currentTool;
+        if (current != ToolType.hand) {
+          _toolBeforeSpacePan = current;
+          notifier.setTool(ToolType.hand);
+        }
+        return KeyEventResult.handled;
+      }
+      if (event is KeyUpEvent && _toolBeforeSpacePan != null) {
+        notifier.setTool(_toolBeforeSpacePan!);
+        _toolBeforeSpacePan = null;
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.handled;
+    }
+
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (_isTyping) return KeyEventResult.ignored;
+
+    final keys = HardwareKeyboard.instance;
+    final mod = keys.isControlPressed || keys.isMetaPressed;
+    final shift = keys.isShiftPressed;
+    void zoom(CanvasZoomAction a) =>
+        ref.read(canvasZoomActionProvider.notifier).trigger(a);
+
+    if (mod) {
+      if (key == LogicalKeyboardKey.keyZ) {
+        shift ? notifier.redo() : notifier.undo();
+      } else if (key == LogicalKeyboardKey.keyY) {
+        notifier.redo();
+      } else if (key == LogicalKeyboardKey.keyC) {
+        notifier.copySelected();
+      } else if (key == LogicalKeyboardKey.keyX) {
+        notifier.cutSelected();
+      } else if (key == LogicalKeyboardKey.keyV) {
+        notifier.pasteClipboard();
+      } else if (key == LogicalKeyboardKey.keyD) {
+        notifier.duplicateSelected();
+      } else if (key == LogicalKeyboardKey.keyA) {
+        notifier.selectAll();
+      } else if (key == LogicalKeyboardKey.keyS) {
+        _save(showSuccess: true);
+      } else if (key == LogicalKeyboardKey.keyK) {
+        setState(() => _isAssistantOpen = !_isAssistantOpen);
+      } else if (key == LogicalKeyboardKey.equal ||
+          key == LogicalKeyboardKey.add ||
+          key == LogicalKeyboardKey.numpadAdd) {
+        zoom(CanvasZoomAction.zoomIn);
+      } else if (key == LogicalKeyboardKey.minus ||
+          key == LogicalKeyboardKey.numpadSubtract) {
+        zoom(CanvasZoomAction.zoomOut);
+      } else if (key == LogicalKeyboardKey.digit0 ||
+          key == LogicalKeyboardKey.numpad0) {
+        zoom(CanvasZoomAction.reset);
+      } else {
+        return KeyEventResult.ignored;
+      }
+      return KeyEventResult.handled;
+    }
+
+    if (shift && key == LogicalKeyboardKey.digit1) {
+      zoom(CanvasZoomAction.fitContent);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.delete ||
+        key == LogicalKeyboardKey.backspace) {
+      notifier.deleteSelected();
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.escape) {
+      notifier.clearSelection();
+      notifier.dismissShapeSuggestion();
+      notifier.dismissHandwrittenMath();
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.pageDown) {
+      notifier.nextPage();
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.pageUp) {
+      notifier.previousPage();
+      return KeyEventResult.handled;
+    }
+    final toolKeys = <LogicalKeyboardKey, ToolType>{
+      LogicalKeyboardKey.keyP: ToolType.pen,
+      LogicalKeyboardKey.keyM: ToolType.marker,
+      LogicalKeyboardKey.keyH: ToolType.highlighter,
+      LogicalKeyboardKey.keyE: ToolType.strokeEraser,
+      LogicalKeyboardKey.keyS: ToolType.shape,
+      LogicalKeyboardKey.keyT: ToolType.text,
+      LogicalKeyboardKey.keyV: ToolType.select,
+      LogicalKeyboardKey.keyL: ToolType.laser,
+    };
+    final tool = toolKeys[key];
+    if (tool != null) {
+      final current = ref.read(whiteboardControllerProvider).currentTool;
+      // Pressing E again toggles whole-stroke / partial erasing.
+      if (tool == ToolType.strokeEraser && current == ToolType.strokeEraser) {
+        notifier.setTool(ToolType.areaEraser);
+      } else {
+        notifier.setTool(tool);
+      }
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  List<({Widget icon, String label, VoidCallback onTap})> _secondaryActions(
+    BuildContext context, {
+    required bool autoOn,
+    required bool infinite,
+  }) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return [
+      (
+        icon: const Icon(Icons.picture_as_pdf_outlined),
+        label: 'Import PDF pages',
+        onTap: _importPdfPages,
+      ),
+      (
+        icon: const Icon(Icons.share_rounded),
+        label: 'Export & Share',
+        onTap: () => showDialog<void>(
+          context: context,
+          builder: (_) => const ExportDialog(),
+        ),
+      ),
+      (
+        icon: Icon(
+          Icons.auto_awesome_rounded,
+          color: autoOn ? const Color(0xFF059669) : Colors.grey,
+        ),
+        label: 'Smart Recognition & AI Settings',
+        onTap: () => AiRecognitionSettingsDialog.show(context),
+      ),
+      (
+        icon: Icon(
+          infinite ? Icons.all_inclusive_rounded : Icons.auto_stories_rounded,
+          color: infinite ? const Color(0xFF6366F1) : primary,
+        ),
+        label: infinite
+            ? 'Canvas: Infinite (switch to Paginated)'
+            : 'Canvas: Paginated (switch to Infinite)',
+        onTap: () {
+          ref.read(whiteboardControllerProvider.notifier).toggleCanvasMode();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                !infinite
+                    ? 'Switched to Infinite Canvas'
+                    : 'Switched to Paginated Mode',
+              ),
+              duration: const Duration(seconds: 1),
+            ),
+          );
+        },
+      ),
+      (
+        icon: Icon(
+          _isToolbarVisible
+              ? Icons.view_sidebar_rounded
+              : Icons.view_sidebar_outlined,
+          color: _isToolbarVisible ? primary : null,
+        ),
+        label: _isToolbarVisible ? 'Hide Toolbar' : 'Show Toolbar',
+        onTap: () => setState(() => _isToolbarVisible = !_isToolbarVisible),
+      ),
+      (
+        icon: Icon(
+          Icons.palette_outlined,
+          color: _isPropertiesOpen ? primary : null,
+        ),
+        label: 'Colors & Canvas Settings',
+        onTap: _toggleProperties,
+      ),
+    ];
+  }
+
+  /// Adds a PDF's pages after the current page.
+  Future<void> _importPdfPages() async {
+    final s = ref.read(whiteboardControllerProvider);
+    final result = await PdfImportFlow.pickAndImport(
+      context,
+      background: s.project.currentPage.background,
+      firstPageNumber: s.project.currentPageIndex + 2,
+    );
+    if (result == null || !mounted) return;
+    ref.read(whiteboardControllerProvider.notifier).insertPages(result.pages);
+    await _save();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Added ${result.pages.length} PDF page(s). Use the highlighter on text to look it up.',
+          ),
+        ),
+      );
+    }
+  }
 
   void _toggleProperties() {
     setState(() {
@@ -40,8 +328,10 @@ class _WhiteboardScreenState extends ConsumerState<WhiteboardScreen> {
           _toolbarPosition ?? Offset(screenSize.width - 68, topPadding + 16);
       _toolbarPosition = Offset(
         (cur.dx + details.delta.dx).clamp(10.0, screenSize.width - 68),
-        (cur.dy + details.delta.dy)
-            .clamp(topPadding + 10, screenSize.height - 420),
+        (cur.dy + details.delta.dy).clamp(
+          topPadding + 10,
+          screenSize.height - 420,
+        ),
       );
     });
   }
@@ -81,306 +371,298 @@ class _WhiteboardScreenState extends ConsumerState<WhiteboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(whiteboardControllerProvider);
-
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          tooltip: 'Back to Home',
-          onPressed: () async {
-            // Auto-save before popping
-            await ref.read(whiteboardControllerProvider.notifier).saveProject();
-            if (context.mounted) {
-              Navigator.of(context).pop();
-            }
-          },
+    // Watch only what the app bar and layout need, so zoom/pan and drawing
+    // don't rebuild the whole screen.
+    final state = ref.watch(
+      whiteboardControllerProvider.select(
+        (s) => (
+          project: (title: s.project.title, id: s.project.id),
+          canUndo: s.canUndo,
+          canRedo: s.canRedo,
+          isSaving: s.isSaving,
+          isAutoMathEnabled: s.isAutoMathEnabled,
+          isAutoShapeEnabled: s.isAutoShapeEnabled,
+          isInfiniteCanvas: s.isInfiniteCanvas,
+          isLeftHanded: s.isLeftHanded,
         ),
-        title: GestureDetector(
-          onTap: () => _editTitle(context, state.project.title),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Flexible(
-                child: Text(
-                  state.project.title,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-              ),
-              const SizedBox(width: 6),
-              const Icon(Icons.edit_outlined, size: 16, color: Colors.grey),
-            ],
-          ),
-        ),
-        actions: [
-          // Undo Button
-          IconButton(
-            icon: const Icon(Icons.undo_rounded),
-            tooltip: 'Undo',
-            onPressed: state.canUndo
-                ? () => ref.read(whiteboardControllerProvider.notifier).undo()
-                : null,
-          ),
-
-          // Redo Button
-          IconButton(
-            icon: const Icon(Icons.redo_rounded),
-            tooltip: 'Redo',
-            onPressed: state.canRedo
-                ? () => ref.read(whiteboardControllerProvider.notifier).redo()
-                : null,
-          ),
-
-          const SizedBox(width: 4),
-
-          // Save Button
-          IconButton(
-            icon: state.isSaving
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.cloud_done_outlined),
-            tooltip: 'Save Board',
-            onPressed: () async {
-              await ref
-                  .read(whiteboardControllerProvider.notifier)
-                  .saveProject();
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Board saved locally'),
-                    duration: Duration(seconds: 1),
-                  ),
-                );
-              }
-            },
-          ),
-
-          // Math Equation Solver & Auto-Calculation
-          IconButton(
-            icon: const Icon(Icons.calculate_outlined),
-            tooltip: 'Math & Equation Solver',
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (ctx) => const MathCalculatorDialog(),
-              );
-            },
-          ),
-
-          // Export & Share Button
-          IconButton(
-            icon: const Icon(Icons.share_rounded),
-            tooltip: 'Export & Share',
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (ctx) => const ExportDialog(),
-              );
-            },
-          ),
-
-          // Smart Recognition & AI Automation Settings
-          IconButton(
-            icon: Icon(
-              Icons.auto_awesome_rounded,
-              color: (state.isAutoMathEnabled || state.isAutoShapeEnabled)
-                  ? const Color(0xFF059669)
-                  : Colors.grey,
-            ),
-            tooltip: 'Smart Recognition & AI Settings',
-            onPressed: () => AiRecognitionSettingsDialog.show(context),
-          ),
-
-          // Canvas Mode Toggle (Paginated Sheet vs Infinite Canvas)
-          IconButton(
-            icon: Icon(
-              state.isInfiniteCanvas
-                  ? Icons.all_inclusive_rounded
-                  : Icons.auto_stories_rounded,
-              color: state.isInfiniteCanvas
-                  ? const Color(0xFF6366F1)
-                  : Theme.of(context).colorScheme.primary,
-            ),
-            tooltip: state.isInfiniteCanvas
-                ? 'Canvas Mode: Infinite (Tap to switch to Paginated)'
-                : 'Canvas Mode: Paginated (Tap to switch to Infinite)',
-            onPressed: () {
-              ref
-                  .read(whiteboardControllerProvider.notifier)
-                  .toggleCanvasMode();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    !state.isInfiniteCanvas
-                        ? '♾️ Switched to Infinite Canvas (Boundless)'
-                        : '📄 Switched to Paginated Mode (Page Sheet)',
-                  ),
-                  duration: const Duration(seconds: 1),
-                ),
-              );
-            },
-          ),
-
-          // Toggle Toolbar Show/Hide
-          IconButton(
-            icon: Icon(
-              _isToolbarVisible
-                  ? Icons.view_sidebar_rounded
-                  : Icons.view_sidebar_outlined,
-              color: _isToolbarVisible
-                  ? Theme.of(context).colorScheme.primary
-                  : null,
-            ),
-            tooltip: _isToolbarVisible ? 'Hide Toolbar' : 'Show Toolbar',
-            onPressed: () {
-              setState(() {
-                _isToolbarVisible = !_isToolbarVisible;
-              });
-            },
-          ),
-
-          // Background & Properties Toggle
-          IconButton(
-            icon: Icon(
-              Icons.palette_outlined,
-              color: _isPropertiesOpen
-                  ? Theme.of(context).colorScheme.primary
-                  : null,
-            ),
-            tooltip: 'Colors & Canvas Settings',
-            onPressed: _toggleProperties,
-          ),
-
-          const SizedBox(width: 8),
-        ],
       ),
-      body: Builder(
-        builder: (context) {
-          final screenSize = MediaQuery.of(context).size;
-          final topPadding = MediaQuery.of(context).padding.top;
-          final isDark = Theme.of(context).brightness == Brightness.dark;
+    );
 
-          // Initialize default toolbar position
-          _toolbarPosition ??= Offset(
-            state.isLeftHanded ? 16 : (screenSize.width - 68),
-            topPadding + 16,
-          );
-
-          return Stack(
-            children: [
-              // Canvas fills 100% of workspace
-              const Positioned.fill(
-                child: WhiteboardCanvas(),
-              ),
-
-              // Shape Suggestion Floating Overlay
-              const Positioned(
-                top: 14,
-                left: 0,
-                right: 0,
-                child: ShapeSuggestionOverlay(),
-              ),
-
-              // Handwritten Math Calculation Floating Overlay
-              const Positioned(
-                top: 14,
-                left: 0,
-                right: 0,
-                child: MathSuggestionOverlay(),
-              ),
-
-              // Floating Draggable Toolbar
-              if (_isToolbarVisible)
-                Positioned(
-                  left: _toolbarPosition!.dx,
-                  top: _toolbarPosition!.dy,
-                  child: WhiteboardToolbar(
-                    isPropertiesOpen: _isPropertiesOpen,
-                    onToggleProperties: _toggleProperties,
-                    onHideToolbar: () =>
-                        setState(() => _isToolbarVisible = false),
-                    onPanUpdate: _onToolbarDragUpdate,
-                  ),
-                ),
-
-              // Minimized Floating Trigger Button to restore Toolbar when hidden
-              if (!_isToolbarVisible)
-                Positioned(
-                  top: _toolbarPosition!.dy,
-                  left: _toolbarPosition!.dx <= screenSize.width / 2
-                      ? 12
-                      : null,
-                  right: _toolbarPosition!.dx > screenSize.width / 2
-                      ? 12
-                      : null,
-                  child: Material(
-                    elevation: 8,
-                    borderRadius: BorderRadius.circular(24),
-                    color: isDark ? const Color(0xFF1F2937) : Colors.white,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(24),
-                      onTap: () => setState(() => _isToolbarVisible = true),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 8),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(
-                            color: isDark
-                                ? Colors.grey.shade800
-                                : Colors.grey.shade200,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.brush_rounded,
-                              size: 18,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                            const SizedBox(width: 4),
-                            const Text(
-                              'Tools',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _leave();
+      },
+      child: Focus(
+        focusNode: _boardFocus,
+        autofocus: true,
+        onKeyEvent: _onKey,
+        child: Scaffold(
+          appBar: AppBar(
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_rounded),
+              tooltip: 'Back to Home',
+              onPressed: _leave,
+            ),
+            title: GestureDetector(
+              onTap: () => _editTitle(context, state.project.title),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      state.project.title,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
-                ),
-
-              // Floating Properties Panel (Positioned adjacent to Draggable Toolbar)
-              if (_isPropertiesOpen && _isToolbarVisible)
-                Positioned(
-                  top: _toolbarPosition!.dy.clamp(16.0, screenSize.height - 400),
-                  left: _toolbarPosition!.dx <= screenSize.width / 2
-                      ? (_toolbarPosition!.dx + 64)
-                      : null,
-                  right: _toolbarPosition!.dx > screenSize.width / 2
-                      ? (screenSize.width - _toolbarPosition!.dx + 8)
-                      : null,
-                  child: const ToolPropertiesPanel(),
-                ),
-
-              // Bottom Floating Unified Whiteboard Controls (Single slim bar)
-              Positioned(
-                bottom: MediaQuery.of(context).padding.bottom + 16,
-                left: 16,
-                right: 16,
-                child: const UnifiedBottomBar(),
+                  const SizedBox(width: 6),
+                  const Icon(Icons.edit_outlined, size: 16, color: Colors.grey),
+                ],
               ),
+            ),
+            actions: [
+              // Undo Button
+              IconButton(
+                icon: const Icon(Icons.undo_rounded),
+                tooltip: 'Undo (Ctrl+Z)',
+                onPressed: state.canUndo
+                    ? () =>
+                          ref.read(whiteboardControllerProvider.notifier).undo()
+                    : null,
+              ),
+
+              // Redo Button
+              IconButton(
+                icon: const Icon(Icons.redo_rounded),
+                tooltip: 'Redo (Ctrl+Shift+Z)',
+                onPressed: state.canRedo
+                    ? () =>
+                          ref.read(whiteboardControllerProvider.notifier).redo()
+                    : null,
+              ),
+
+              const SizedBox(width: 4),
+
+              // Save Button
+              IconButton(
+                icon: state.isSaving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.cloud_done_outlined),
+                tooltip: 'Save Board (Ctrl+S)',
+                onPressed: () => _save(showSuccess: true),
+              ),
+
+              // AI Assistant (board-aware tutor, generator, diagram maker)
+              IconButton(
+                icon: Icon(
+                  Icons.psychology_alt_rounded,
+                  color: _isAssistantOpen
+                      ? Theme.of(context).colorScheme.primary
+                      : null,
+                ),
+                tooltip: 'AI Assistant (Ctrl+K)',
+                onPressed: () =>
+                    setState(() => _isAssistantOpen = !_isAssistantOpen),
+              ),
+
+              // Secondary actions: inline on wide screens, overflow menu on
+              // phones (they overflowed the app bar below ~760px).
+              if (MediaQuery.sizeOf(context).width >= 760)
+                for (final a in _secondaryActions(
+                  context,
+                  autoOn: state.isAutoMathEnabled || state.isAutoShapeEnabled,
+                  infinite: state.isInfiniteCanvas,
+                ))
+                  IconButton(icon: a.icon, tooltip: a.label, onPressed: a.onTap)
+              else
+                PopupMenuButton<int>(
+                  tooltip: 'More actions',
+                  icon: const Icon(Icons.more_vert_rounded),
+                  itemBuilder: (menuContext) {
+                    final items = _secondaryActions(
+                      context,
+                      autoOn:
+                          state.isAutoMathEnabled || state.isAutoShapeEnabled,
+                      infinite: state.isInfiniteCanvas,
+                    );
+                    return [
+                      for (final a in items)
+                        PopupMenuItem<int>(
+                          onTap: a.onTap,
+                          child: ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            leading: a.icon,
+                            title: Text(a.label),
+                          ),
+                        ),
+                    ];
+                  },
+                ),
+
+              const SizedBox(width: 8),
             ],
-          );
-        },
+          ),
+          body: Builder(
+            builder: (context) {
+              final screenSize = MediaQuery.of(context).size;
+              final topPadding = MediaQuery.of(context).padding.top;
+              final isDark = Theme.of(context).brightness == Brightness.dark;
+
+              // Initialize default toolbar position
+              _toolbarPosition ??= Offset(
+                state.isLeftHanded ? 16 : (screenSize.width - 68),
+                topPadding + 16,
+              );
+
+              return Stack(
+                children: [
+                  // Canvas fills 100% of workspace
+                  const Positioned.fill(child: WhiteboardCanvas()),
+
+                  // Shape Suggestion Floating Overlay
+                  const Positioned(
+                    top: 14,
+                    left: 0,
+                    right: 0,
+                    child: ShapeSuggestionOverlay(),
+                  ),
+
+                  // Handwritten Math Calculation Floating Overlay
+                  const Positioned(
+                    top: 14,
+                    left: 0,
+                    right: 0,
+                    child: MathSuggestionOverlay(),
+                  ),
+
+                  // Look-up offer after highlighting text on a PDF page
+                  const Positioned(
+                    top: 14,
+                    left: 12,
+                    right: 12,
+                    child: PdfLookupOverlay(),
+                  ),
+
+                  // Floating Draggable Toolbar
+                  if (_isToolbarVisible)
+                    Positioned(
+                      left: _toolbarPosition!.dx,
+                      top: _toolbarPosition!.dy,
+                      child: WhiteboardToolbar(
+                        isPropertiesOpen: _isPropertiesOpen,
+                        onToggleProperties: _toggleProperties,
+                        onHideToolbar: () =>
+                            setState(() => _isToolbarVisible = false),
+                        onPanUpdate: _onToolbarDragUpdate,
+                      ),
+                    ),
+
+                  // Minimized Floating Trigger Button to restore Toolbar when hidden
+                  if (!_isToolbarVisible)
+                    Positioned(
+                      top: _toolbarPosition!.dy,
+                      left: _toolbarPosition!.dx <= screenSize.width / 2
+                          ? 12
+                          : null,
+                      right: _toolbarPosition!.dx > screenSize.width / 2
+                          ? 12
+                          : null,
+                      child: Material(
+                        elevation: 8,
+                        borderRadius: BorderRadius.circular(24),
+                        color: isDark ? const Color(0xFF1F2937) : Colors.white,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(24),
+                          onTap: () => setState(() => _isToolbarVisible = true),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                color: isDark
+                                    ? Colors.grey.shade800
+                                    : Colors.grey.shade200,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.brush_rounded,
+                                  size: 18,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                                const SizedBox(width: 4),
+                                const Text(
+                                  'Tools',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                  // Floating Properties Panel (Positioned adjacent to Draggable Toolbar)
+                  if (_isPropertiesOpen && _isToolbarVisible)
+                    Positioned(
+                      top: _toolbarPosition!.dy.clamp(
+                        16.0,
+                        screenSize.height - 400,
+                      ),
+                      left: _toolbarPosition!.dx <= screenSize.width / 2
+                          ? (_toolbarPosition!.dx + 64)
+                          : null,
+                      right: _toolbarPosition!.dx > screenSize.width / 2
+                          ? (screenSize.width - _toolbarPosition!.dx + 8)
+                          : null,
+                      child: const ToolPropertiesPanel(),
+                    ),
+
+                  // Bottom Floating Unified Whiteboard Controls (Single slim bar)
+                  Positioned(
+                    bottom: MediaQuery.of(context).padding.bottom + 16,
+                    left: 16,
+                    right: 16,
+                    child: const UnifiedBottomBar(),
+                  ),
+
+                  // AI Assistant side panel (non-modal: drawing continues while
+                  // the AI responds).
+                  if (_isAssistantOpen)
+                    Positioned(
+                      top: 8,
+                      bottom: MediaQuery.of(context).padding.bottom + 76,
+                      right: 8,
+                      width: (screenSize.width - 16).clamp(280.0, 420.0),
+                      child: AiAssistantPanel(
+                        onClose: () {
+                          setState(() => _isAssistantOpen = false);
+                          _boardFocus.requestFocus();
+                        },
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ),
       ),
     );
   }

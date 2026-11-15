@@ -5,7 +5,9 @@ enum BackgroundStyle {
   grid,
   ruled,
   dotted,
-  graph;
+  graph,
+  isometric,
+  polar;
 
   String get displayName {
     switch (this) {
@@ -19,6 +21,10 @@ enum BackgroundStyle {
         return 'Dotted';
       case BackgroundStyle.graph:
         return 'Graph Paper';
+      case BackgroundStyle.isometric:
+        return 'Isometric 3D';
+      case BackgroundStyle.polar:
+        return 'Polar Coordinates';
     }
   }
 }
@@ -26,7 +32,8 @@ enum BackgroundStyle {
 class CanvasBackground {
   final BackgroundStyle style;
   final int colorValue; // ARGB int
-  final double spacing; // Spacing in points (e.g. 28.0 for ruled lines, 32.0 for grid)
+  final double
+  spacing; // Spacing in points (e.g. 28.0 for ruled lines, 32.0 for grid)
   final int patternColorValue; // ARGB int for grid/ruled lines
 
   const CanvasBackground({

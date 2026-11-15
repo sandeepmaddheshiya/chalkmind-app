@@ -16,7 +16,8 @@ class SelectionPainter extends CustomPainter {
     // 1. Paint selection marquee rectangle while user is dragging selection area
     if (selectionMarquee != null) {
       final fillPaint = Paint()
-        ..color = const Color(0x263B82F6) // 15% blue
+        ..color =
+            const Color(0x263B82F6) // 15% blue
         ..style = PaintingStyle.fill;
 
       final borderPaint = Paint()

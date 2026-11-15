@@ -1,14 +1,41 @@
-import 'package:flutter/material.dart';
+import 'dart:math' as math;
+import 'dart:ui' show Path, PathMetric, Rect;
+
+import 'package:flutter/material.dart' show Offset;
 import 'package:uuid/uuid.dart';
+
 import '../models/stroke_model.dart';
 import '../models/stroke_point.dart';
 import '../models/tool_type.dart';
 
+/// Writes text (usually a maths answer) as natural-looking handwritten ink.
+///
+/// Each character is designed as smooth pen paths (cubic curves, real loops
+/// for 0/6/8/9) in a unit box, then sampled evenly and transformed to sit on
+/// the writer's baseline, at their letter height and angle. A slight forward
+/// slant and small per-letter variations (size, baseline, tilt) make it look
+/// hand-written rather than typeset. Variation is seeded from the text, so the
+/// same answer always looks the same.
 class HandwritingStrokeGenerator {
   static const uuid = Uuid();
 
-  /// Converts a text result (e.g. "4" or "144" or "3.14") into natural handwritten vector Strokes
-  /// Supports slant angle via direction and normal vectors
+  /// Characters with real handwritten glyphs. Others are placed as typed
+  /// text by the caller instead (see [canWrite]).
+  static const String writableCharacters = '0123456789.,+-−=/*×÷()%:^xXyYzZaAbBcC²³ ';
+
+  /// True when every character of [text] has a real handwritten glyph.
+  static bool canWrite(String text) =>
+      text.isNotEmpty && text.split('').every(writableCharacters.contains);
+
+  /// Forward slant of handwriting (horizontal shift per unit of height).
+  static const double _slant = 0.14;
+
+  /// Gap between letters, as a fraction of letter height.
+  static const double _letterGap = 0.11;
+
+  /// Distance between pen samples, in pixels.
+  static const double _sampleSpacing = 1.8;
+
   static List<Stroke> generateHandwrittenStrokes({
     required String text,
     required Offset startPosition,
@@ -19,401 +46,426 @@ class HandwritingStrokeGenerator {
     Offset normal = const Offset(0, 1),
     ToolType toolType = ToolType.pen,
   }) {
-    final List<Stroke> resultStrokes = [];
-    final charWidth = characterHeight * 0.65;
-    final charSpacing = characterHeight * 0.22;
+    final h = characterHeight;
+    final dir = _unit(direction, const Offset(1, 0));
+    final norm = _unit(normal, const Offset(0, 1));
+    final rnd = math.Random(text.hashCode ^ h.round());
+    final strokes = <Stroke>[];
+    var x = 0.0; // pen position along the baseline, in pixels
+    var time = DateTime.now().millisecondsSinceEpoch;
 
-    double progress = 0.0;
-    final now = DateTime.now().millisecondsSinceEpoch;
+    for (final char in text.split('')) {
+      final glyph = _glyph(char);
+      if (glyph == null) {
+        x += 0.35 * h; // unknown: leave a gap (callers check canWrite first)
+        continue;
+      }
+      if (glyph.paths.isNotEmpty) {
+        // Small natural variation per letter.
+        final scale = 1 + (rnd.nextDouble() - 0.5) * 0.06;
+        final lift = (rnd.nextDouble() - 0.5) * 0.04 * h;
+        final tilt = (rnd.nextDouble() - 0.5) * 0.05; // radians
+        final gh = h * scale;
+        final pivot = Offset(glyph.advance * gh / 2, gh / 2);
 
-    for (int i = 0; i < text.length; i++) {
-      final char = text[i];
-      final charOrigin = startPosition + direction * progress;
-
-      final glyphStrokes = _getGlyphStrokes(
-        char,
-        charOrigin,
-        direction,
-        normal,
-        charWidth,
-        characterHeight,
-        now + (i * 50),
-      );
-
-      for (final points in glyphStrokes) {
-        if (points.isNotEmpty) {
-          resultStrokes.add(
-            Stroke(
+        for (final unitPath in glyph.paths) {
+          final path = unitPath(gh).path;
+          for (final metric in path.computeMetrics()) {
+            final pts = _sample(metric);
+            if (pts.isEmpty) continue;
+            final out = <StrokePoint>[];
+            for (final p in pts) {
+              // Tilt around the glyph centre, then slant (shear), then place.
+              final c = p - pivot;
+              final r = Offset(
+                c.dx * math.cos(tilt) - c.dy * math.sin(tilt),
+                c.dx * math.sin(tilt) + c.dy * math.cos(tilt),
+              ) + pivot;
+              final sheared = Offset(r.dx + (gh - r.dy) * _slant, r.dy);
+              // Align glyph baseline (gh) to the line's baseline (h).
+              final world = startPosition +
+                  dir * (x + sheared.dx) +
+                  norm * (sheared.dy + (h - gh) + lift);
+              out.add(StrokePoint(x: world.dx, y: world.dy, timestamp: time));
+              time += 6;
+            }
+            strokes.add(Stroke(
               id: uuid.v4(),
-              points: points,
+              points: out,
               colorValue: colorValue,
               width: strokeWidth,
               toolType: toolType,
-            ),
-          );
+            ));
+            time += 60; // pen lift
+          }
         }
       }
-
-      progress += (char == '.' || char == ',') ? (charWidth * 0.4) : (charWidth + charSpacing);
+      x += (glyph.advance + _letterGap) * h;
     }
-
-    return resultStrokes;
+    return strokes;
   }
 
-  static List<List<StrokePoint>> _getGlyphStrokes(
-    String char,
-    Offset origin,
-    Offset dir,
-    Offset norm,
-    double w,
-    double h,
-    int baseTime,
-  ) {
-    Offset toWorld(double uNorm, double vNorm) {
-      return origin + dir * (uNorm * w) + norm * (vNorm * h);
+  static Offset _unit(Offset v, Offset fallback) {
+    final d = v.distance;
+    return d < 1e-6 ? fallback : v / d;
+  }
+
+  /// Evenly spaced points along one pen path.
+  static List<Offset> _sample(PathMetric m) {
+    if (m.length < 0.5) {
+      final t = m.getTangentForOffset(0);
+      return t == null ? const [] : [t.position, t.position + const Offset(0.6, 0.6)];
     }
+    final n = math.max(2, (m.length / _sampleSpacing).ceil());
+    return [
+      for (int i = 0; i <= n; i++) m.getTangentForOffset(m.length * i / n)!.position,
+    ];
+  }
 
-    switch (char) {
-      case '0':
-        return [
-          _sampleCurve([
-            toWorld(0.5, 0.0),
-            toWorld(0.0, 0.35),
-            toWorld(0.0, 0.7),
-            toWorld(0.5, 1.0),
-            toWorld(1.0, 0.7),
-            toWorld(1.0, 0.35),
-            toWorld(0.5, 0.0),
-          ], baseTime),
-        ];
+  // ---------------------------------------------------------------------------
+  // Glyphs. Coordinates are in units of letter height: y = 0 is the top of a
+  // capital/digit, y = 1 the baseline, y > 1 a descender (as in 'y'). x runs
+  // from 0 to the glyph's advance width. Lowercase x-height starts at 0.45.
 
-      case '1':
-        return [
-          _sampleCurve([
-            toWorld(0.2, 0.25),
-            toWorld(0.5, 0.0),
-            toWorld(0.5, 1.0),
-          ], baseTime),
-        ];
-
-      case '2':
-        return [
-          _sampleCurve([
-            toWorld(0.15, 0.25),
-            toWorld(0.5, 0.0),
-            toWorld(0.9, 0.25),
-            toWorld(0.15, 0.9),
-            toWorld(1.0, 1.0),
-          ], baseTime),
-        ];
-
-      case '3':
-        return [
-          _sampleCurve([
-            toWorld(0.1, 0.15),
-            toWorld(0.9, 0.15),
-            toWorld(0.5, 0.45),
-            toWorld(1.0, 0.75),
-            toWorld(0.1, 1.0),
-          ], baseTime),
-        ];
-
-      case '4':
-        return [
-          _sampleCurve([
-            toWorld(0.75, 0.05),
-            toWorld(0.1, 0.6),
-            toWorld(0.9, 0.6),
-          ], baseTime),
-          _sampleCurve([
-            toWorld(0.75, 0.35),
-            toWorld(0.75, 1.0),
-          ], baseTime + 15),
-        ];
-
-      case '5':
-        return [
-          _sampleCurve([
-            toWorld(0.9, 0.0),
-            toWorld(0.2, 0.0),
-            toWorld(0.15, 0.45),
-            toWorld(0.9, 0.6),
-            toWorld(0.9, 1.0),
-            toWorld(0.1, 0.9),
-          ], baseTime),
-        ];
-
-      case '6':
-        return [
-          _sampleCurve([
-            toWorld(0.8, 0.0),
-            toWorld(0.1, 0.6),
-            toWorld(0.5, 1.0),
-            toWorld(1.0, 0.75),
-            toWorld(0.5, 0.5),
-            toWorld(0.1, 0.65),
-          ], baseTime),
-        ];
-
-      case '7':
-        return [
-          _sampleCurve([
-            toWorld(0.0, 0.0),
-            toWorld(1.0, 0.0),
-            toWorld(0.4, 1.0),
-          ], baseTime),
-        ];
-
-      case '8':
-        return [
-          _sampleCurve([
-            toWorld(0.5, 0.45),
-            toWorld(0.1, 0.2),
-            toWorld(0.5, 0.0),
-            toWorld(0.9, 0.2),
-            toWorld(0.5, 0.45),
-            toWorld(0.1, 0.8),
-            toWorld(0.5, 1.0),
-            toWorld(0.9, 0.8),
-            toWorld(0.5, 0.45),
-          ], baseTime),
-        ];
-
-      case '9':
-        return [
-          _sampleCurve([
-            toWorld(0.9, 0.4),
-            toWorld(0.5, 0.5),
-            toWorld(0.0, 0.25),
-            toWorld(0.5, 0.0),
-            toWorld(0.9, 0.25),
-            toWorld(0.9, 0.9),
-            toWorld(0.2, 1.0),
-          ], baseTime),
-        ];
-
-      case '.':
-        final pt1 = toWorld(0.5, 0.95);
-        final pt2 = toWorld(0.55, 0.98);
-        return [
-          [
-            StrokePoint(x: pt1.dx, y: pt1.dy, timestamp: baseTime),
-            StrokePoint(x: pt2.dx, y: pt2.dy, timestamp: baseTime + 5),
-          ],
-        ];
-
-      case '+':
-        return [
-          _sampleCurve([
-            toWorld(0.5, 0.2),
-            toWorld(0.5, 0.8),
-          ], baseTime),
-          _sampleCurve([
-            toWorld(0.2, 0.5),
-            toWorld(0.8, 0.5),
-          ], baseTime + 10),
-        ];
-
-      case '=':
-        return [
-          _sampleCurve([
-            toWorld(0.1, 0.38),
-            toWorld(0.9, 0.38),
-          ], baseTime),
-          _sampleCurve([
-            toWorld(0.1, 0.62),
-            toWorld(0.9, 0.62),
-          ], baseTime + 10),
-        ];
-
-      case '/':
-        return [
-          _sampleCurve([
-            toWorld(0.15, 0.95),
-            toWorld(0.85, 0.05),
-          ], baseTime),
-        ];
-
-      case '*':
-        return [
-          _sampleCurve([
-            toWorld(0.25, 0.25),
-            toWorld(0.75, 0.75),
-          ], baseTime),
-          _sampleCurve([
-            toWorld(0.25, 0.75),
-            toWorld(0.75, 0.25),
-          ], baseTime + 10),
-        ];
-
-      case '(':
-        return [
-          _sampleCurve([
-            toWorld(0.7, 0.05),
-            toWorld(0.3, 0.5),
-            toWorld(0.7, 0.95),
-          ], baseTime),
-        ];
-
-      case ')':
-        return [
-          _sampleCurve([
-            toWorld(0.3, 0.05),
-            toWorld(0.7, 0.5),
-            toWorld(0.3, 0.95),
-          ], baseTime),
-        ];
-
-      case 'x':
-      case 'X':
-        return [
-          _sampleCurve([
-            toWorld(0.2, 0.25),
-            toWorld(0.8, 0.95),
-          ], baseTime),
-          _sampleCurve([
-            toWorld(0.8, 0.25),
-            toWorld(0.2, 0.95),
-          ], baseTime + 10),
-        ];
-
-      case 'y':
-      case 'Y':
-        return [
-          _sampleCurve([
-            toWorld(0.15, 0.25),
-            toWorld(0.5, 0.65),
-          ], baseTime),
-          _sampleCurve([
-            toWorld(0.85, 0.25),
-            toWorld(0.15, 1.15),
-          ], baseTime + 10),
-        ];
-
-      case 'z':
-      case 'Z':
-        return [
-          _sampleCurve([
-            toWorld(0.15, 0.25),
-            toWorld(0.85, 0.25),
-            toWorld(0.15, 0.95),
-            toWorld(0.85, 0.95),
-          ], baseTime),
-        ];
-
-      case '-':
-        return [
-          _sampleCurve([
-            toWorld(0.15, 0.55),
-            toWorld(0.85, 0.55),
-          ], baseTime),
-        ];
-
-      case 'a':
-      case 'A':
-        return [
-          _sampleCurve([
-            toWorld(0.75, 0.45),
-            toWorld(0.40, 0.35),
-            toWorld(0.20, 0.58),
-            toWorld(0.40, 0.82),
-            toWorld(0.75, 0.72),
-            toWorld(0.75, 0.38),
-            toWorld(0.75, 0.95),
-            toWorld(0.85, 0.92),
-          ], baseTime),
-        ];
-
-      case 'b':
-      case 'B':
-        return [
-          _sampleCurve([
-            toWorld(0.22, 0.05),
-            toWorld(0.22, 0.95),
-            toWorld(0.22, 0.52),
-            toWorld(0.75, 0.52),
-            toWorld(0.78, 0.78),
-            toWorld(0.50, 0.95),
-            toWorld(0.22, 0.92),
-          ], baseTime),
-        ];
-
-      case 'c':
-      case 'C':
-        return [
-          _sampleCurve([
-            toWorld(0.80, 0.45),
-            toWorld(0.50, 0.35),
-            toWorld(0.25, 0.60),
-            toWorld(0.50, 0.85),
-            toWorld(0.80, 0.80),
-          ], baseTime),
-        ];
-
-      case '²':
-        return [
-          _sampleCurve([
-            toWorld(0.20, 0.12),
-            toWorld(0.50, 0.00),
-            toWorld(0.80, 0.12),
-            toWorld(0.20, 0.40),
-            toWorld(0.85, 0.40),
-          ], baseTime),
-        ];
-
-      case '³':
-        return [
-          _sampleCurve([
-            toWorld(0.20, 0.05),
-            toWorld(0.80, 0.05),
-            toWorld(0.50, 0.22),
-            toWorld(0.85, 0.32),
-            toWorld(0.20, 0.42),
-          ], baseTime),
-        ];
-
-      case '^':
-        return [
-          _sampleCurve([
-            toWorld(0.20, 0.35),
-            toWorld(0.50, 0.05),
-            toWorld(0.80, 0.35),
-          ], baseTime),
-        ];
-
+  static _Glyph? _glyph(String c) {
+    switch (c) {
       case ' ':
-        return [];
-
-      default:
-        // Generic fallback stroke so unknown characters are still visibly written
-        return [
-          _sampleCurve([
-            toWorld(0.2, 0.8),
-            toWorld(0.8, 0.2),
-          ], baseTime),
-        ];
+        return const _Glyph(0.32, []);
+      case '0':
+        return _Glyph(0.56, [
+          (s) => _p(s)
+            ..moveTo(0.30, 0.0)
+            ..cubicTo(0.06, 0.0, 0.02, 0.32, 0.02, 0.52)
+            ..cubicTo(0.02, 0.80, 0.14, 1.0, 0.28, 1.0)
+            ..cubicTo(0.46, 1.0, 0.54, 0.76, 0.54, 0.48)
+            ..cubicTo(0.54, 0.20, 0.44, 0.0, 0.28, 0.02),
+        ]);
+      case '1':
+        return _Glyph(0.36, [
+          (s) => _p(s)
+            ..moveTo(0.04, 0.22)
+            ..quadraticBezierTo(0.18, 0.12, 0.26, 0.0)
+            ..lineTo(0.26, 1.0),
+        ]);
+      case '2':
+        return _Glyph(0.56, [
+          (s) => _p(s)
+            ..moveTo(0.04, 0.22)
+            ..cubicTo(0.08, 0.02, 0.48, -0.06, 0.50, 0.24)
+            ..cubicTo(0.52, 0.46, 0.22, 0.70, 0.02, 1.0)
+            ..quadraticBezierTo(0.30, 0.97, 0.56, 1.0),
+        ]);
+      case '3':
+        return _Glyph(0.54, [
+          (s) => _p(s)
+            ..moveTo(0.04, 0.12)
+            ..cubicTo(0.18, -0.04, 0.50, -0.02, 0.48, 0.22)
+            ..cubicTo(0.46, 0.40, 0.30, 0.46, 0.18, 0.46)
+            ..cubicTo(0.44, 0.46, 0.54, 0.62, 0.52, 0.76)
+            ..cubicTo(0.50, 1.02, 0.14, 1.06, 0.02, 0.86),
+        ]);
+      case '4':
+        return _Glyph(0.58, [
+          (s) => _p(s)
+            ..moveTo(0.40, 0.0)
+            ..lineTo(0.03, 0.66)
+            ..lineTo(0.56, 0.66),
+          (s) => _p(s)
+            ..moveTo(0.42, 0.30)
+            ..lineTo(0.42, 1.0),
+        ]);
+      case '5':
+        return _Glyph(0.54, [
+          (s) => _p(s)
+            ..moveTo(0.12, 0.02)
+            ..lineTo(0.08, 0.44)
+            ..cubicTo(0.26, 0.32, 0.54, 0.38, 0.53, 0.68)
+            ..cubicTo(0.52, 0.98, 0.16, 1.04, 0.02, 0.86),
+          (s) => _p(s)
+            ..moveTo(0.12, 0.02)
+            ..lineTo(0.50, 0.0),
+        ]);
+      case '6':
+        return _Glyph(0.56, [
+          (s) => _p(s)
+            ..moveTo(0.46, 0.04)
+            ..cubicTo(0.20, 0.10, 0.04, 0.40, 0.04, 0.66)
+            ..cubicTo(0.04, 0.90, 0.16, 1.0, 0.30, 1.0)
+            ..cubicTo(0.46, 1.0, 0.54, 0.88, 0.54, 0.74)
+            ..cubicTo(0.54, 0.58, 0.42, 0.48, 0.28, 0.48)
+            ..cubicTo(0.16, 0.48, 0.06, 0.56, 0.05, 0.68),
+        ]);
+      case '7':
+        return _Glyph(0.54, [
+          (s) => _p(s)
+            ..moveTo(0.02, 0.03)
+            ..quadraticBezierTo(0.30, -0.01, 0.54, 0.02)
+            ..cubicTo(0.40, 0.30, 0.26, 0.62, 0.20, 1.0),
+        ]);
+      case '8':
+        return _Glyph(0.56, [
+          (s) => _p(s)
+            ..moveTo(0.46, 0.14)
+            ..cubicTo(0.42, 0.0, 0.08, -0.01, 0.08, 0.22)
+            ..cubicTo(0.08, 0.38, 0.26, 0.42, 0.30, 0.46)
+            ..cubicTo(0.48, 0.52, 0.56, 0.64, 0.54, 0.78)
+            ..cubicTo(0.52, 1.01, 0.04, 1.02, 0.04, 0.76)
+            ..cubicTo(0.04, 0.60, 0.20, 0.52, 0.30, 0.46)
+            ..cubicTo(0.40, 0.40, 0.50, 0.32, 0.46, 0.14),
+        ]);
+      case '9':
+        return _Glyph(0.54, [
+          (s) => _p(s)
+            ..moveTo(0.50, 0.24)
+            ..cubicTo(0.48, 0.06, 0.36, 0.0, 0.26, 0.0)
+            ..cubicTo(0.10, 0.0, 0.02, 0.12, 0.02, 0.26)
+            ..cubicTo(0.02, 0.42, 0.14, 0.50, 0.26, 0.50)
+            ..cubicTo(0.40, 0.50, 0.50, 0.40, 0.50, 0.24)
+            ..cubicTo(0.50, 0.56, 0.46, 0.84, 0.36, 1.0),
+        ]);
+      case '.':
+        return _Glyph(0.18, [(s) => _dot(s, 0.075, 0.965)]);
+      case ',':
+        return _Glyph(0.2, [
+          (s) => _p(s)
+            ..moveTo(0.10, 0.92)
+            ..quadraticBezierTo(0.11, 1.06, 0.02, 1.16),
+        ]);
+      case ':':
+        return _Glyph(0.18, [(s) => _dot(s, 0.075, 0.55), (s) => _dot(s, 0.075, 0.965)]);
+      case '+':
+        return _Glyph(0.52, [
+          (s) => _p(s)
+            ..moveTo(0.26, 0.34)
+            ..lineTo(0.25, 0.84),
+          (s) => _p(s)
+            ..moveTo(0.02, 0.60)
+            ..quadraticBezierTo(0.26, 0.58, 0.50, 0.59),
+        ]);
+      case '-':
+      case '−':
+        return _Glyph(0.44, [
+          (s) => _p(s)
+            ..moveTo(0.03, 0.60)
+            ..quadraticBezierTo(0.22, 0.58, 0.42, 0.59),
+        ]);
+      case '=':
+        return _Glyph(0.50, [
+          (s) => _p(s)
+            ..moveTo(0.03, 0.48)
+            ..quadraticBezierTo(0.25, 0.46, 0.48, 0.47),
+          (s) => _p(s)
+            ..moveTo(0.03, 0.70)
+            ..quadraticBezierTo(0.25, 0.68, 0.48, 0.69),
+        ]);
+      case '×':
+      case '*':
+        return _Glyph(0.46, [
+          (s) => _p(s)
+            ..moveTo(0.04, 0.40)
+            ..lineTo(0.42, 0.80),
+          (s) => _p(s)
+            ..moveTo(0.42, 0.40)
+            ..lineTo(0.04, 0.80),
+        ]);
+      case '÷':
+        return _Glyph(0.48, [
+          (s) => _p(s)
+            ..moveTo(0.03, 0.60)
+            ..lineTo(0.45, 0.60),
+          (s) => _dot(s, 0.24, 0.40),
+          (s) => _dot(s, 0.24, 0.80),
+        ]);
+      case '/':
+        return _Glyph(0.42, [
+          (s) => _p(s)
+            ..moveTo(0.04, 1.0)
+            ..lineTo(0.40, 0.0),
+        ]);
+      case '(':
+        return _Glyph(0.30, [
+          (s) => _p(s)
+            ..moveTo(0.26, -0.02)
+            ..quadraticBezierTo(-0.04, 0.50, 0.26, 1.06),
+        ]);
+      case ')':
+        return _Glyph(0.30, [
+          (s) => _p(s)
+            ..moveTo(0.04, -0.02)
+            ..quadraticBezierTo(0.34, 0.50, 0.04, 1.06),
+        ]);
+      case '%':
+        return _Glyph(0.62, [
+          (s) => _p(s)..addOval(_r(0.02, 0.02, 0.20, 0.26, s)),
+          (s) => _p(s)
+            ..moveTo(0.54, 0.0)
+            ..lineTo(0.08, 1.0),
+          (s) => _p(s)..addOval(_r(0.38, 0.72, 0.20, 0.26, s)),
+        ]);
+      case '^':
+        return _Glyph(0.40, [
+          (s) => _p(s)
+            ..moveTo(0.04, 0.36)
+            ..lineTo(0.20, 0.06)
+            ..lineTo(0.36, 0.36),
+        ]);
+      case 'x':
+        return _Glyph(0.48, [
+          (s) => _p(s)
+            ..moveTo(0.04, 0.46)
+            ..cubicTo(0.18, 0.46, 0.30, 1.0, 0.46, 1.0),
+          (s) => _p(s)
+            ..moveTo(0.44, 0.46)
+            ..lineTo(0.04, 1.0),
+        ]);
+      case 'X':
+        return _Glyph(0.56, [
+          (s) => _p(s)
+            ..moveTo(0.02, 0.0)
+            ..lineTo(0.54, 1.0),
+          (s) => _p(s)
+            ..moveTo(0.54, 0.0)
+            ..lineTo(0.02, 1.0),
+        ]);
+      case 'y':
+        return _Glyph(0.48, [
+          (s) => _p(s)
+            ..moveTo(0.04, 0.46)
+            ..cubicTo(0.04, 0.82, 0.14, 0.92, 0.24, 0.92)
+            ..cubicTo(0.36, 0.92, 0.44, 0.80, 0.44, 0.46)
+            ..lineTo(0.44, 1.12)
+            ..cubicTo(0.44, 1.36, 0.18, 1.40, 0.06, 1.24),
+        ]);
+      case 'Y':
+        return _Glyph(0.54, [
+          (s) => _p(s)
+            ..moveTo(0.02, 0.0)
+            ..lineTo(0.27, 0.50)
+            ..lineTo(0.27, 1.0),
+          (s) => _p(s)
+            ..moveTo(0.52, 0.0)
+            ..lineTo(0.27, 0.50),
+        ]);
+      case 'z':
+        return _Glyph(0.46, [
+          (s) => _p(s)
+            ..moveTo(0.04, 0.47)
+            ..lineTo(0.42, 0.47)
+            ..lineTo(0.03, 1.0)
+            ..quadraticBezierTo(0.22, 0.97, 0.44, 1.0),
+        ]);
+      case 'Z':
+        return _Glyph(0.54, [
+          (s) => _p(s)
+            ..moveTo(0.03, 0.02)
+            ..lineTo(0.50, 0.02)
+            ..lineTo(0.02, 1.0)
+            ..quadraticBezierTo(0.26, 0.97, 0.52, 1.0),
+        ]);
+      case 'a':
+        return _Glyph(0.50, [
+          (s) => _p(s)
+            ..moveTo(0.42, 0.56)
+            ..cubicTo(0.34, 0.42, 0.04, 0.44, 0.04, 0.74)
+            ..cubicTo(0.04, 1.02, 0.36, 1.04, 0.42, 0.78),
+          (s) => _p(s)
+            ..moveTo(0.43, 0.46)
+            ..lineTo(0.43, 0.90)
+            ..quadraticBezierTo(0.44, 1.0, 0.50, 0.98),
+        ]);
+      case 'A':
+        return _Glyph(0.58, [
+          (s) => _p(s)
+            ..moveTo(0.02, 1.0)
+            ..lineTo(0.29, 0.0)
+            ..lineTo(0.56, 1.0),
+          (s) => _p(s)
+            ..moveTo(0.12, 0.64)
+            ..lineTo(0.46, 0.64),
+        ]);
+      case 'b':
+        return _Glyph(0.50, [
+          (s) => _p(s)
+            ..moveTo(0.06, 0.0)
+            ..lineTo(0.06, 1.0),
+          (s) => _p(s)
+            ..moveTo(0.06, 0.68)
+            ..cubicTo(0.14, 0.42, 0.48, 0.42, 0.48, 0.72)
+            ..cubicTo(0.48, 1.04, 0.12, 1.04, 0.06, 0.90),
+        ]);
+      case 'B':
+        return _Glyph(0.52, [
+          (s) => _p(s)
+            ..moveTo(0.06, 0.0)
+            ..lineTo(0.06, 1.0),
+          (s) => _p(s)
+            ..moveTo(0.06, 0.02)
+            ..cubicTo(0.48, -0.02, 0.48, 0.46, 0.06, 0.46)
+            ..cubicTo(0.56, 0.44, 0.56, 1.02, 0.06, 0.98),
+        ]);
+      case 'c':
+        return _Glyph(0.46, [
+          (s) => _p(s)
+            ..moveTo(0.42, 0.54)
+            ..cubicTo(0.30, 0.42, 0.04, 0.46, 0.04, 0.73)
+            ..cubicTo(0.04, 1.02, 0.32, 1.04, 0.44, 0.92),
+        ]);
+      case 'C':
+        return _Glyph(0.54, [
+          (s) => _p(s)
+            ..moveTo(0.50, 0.12)
+            ..cubicTo(0.36, -0.04, 0.02, 0.02, 0.02, 0.50)
+            ..cubicTo(0.02, 0.98, 0.36, 1.04, 0.52, 0.88),
+        ]);
+      case '²':
+        return _superscript('2');
+      case '³':
+        return _superscript('3');
     }
+    return null;
   }
 
-  static List<StrokePoint> _sampleCurve(List<Offset> waypoints, int baseTime) {
-    final List<StrokePoint> points = [];
-    int time = baseTime;
-
-    for (int i = 0; i < waypoints.length - 1; i++) {
-      final p1 = waypoints[i];
-      final p2 = waypoints[i + 1];
-      final dist = (p2 - p1).distance;
-      final steps = (dist / 4.0).clamp(3, 16).toInt();
-
-      for (int s = 0; s < steps; s++) {
-        final t = s / steps;
-        final x = p1.dx + (p2.dx - p1.dx) * t;
-        final y = p1.dy + (p2.dy - p1.dy) * t;
-        points.add(StrokePoint(x: x, y: y, timestamp: time));
-        time += 4;
-      }
-    }
-    points.add(StrokePoint(x: waypoints.last.dx, y: waypoints.last.dy, timestamp: time));
-    return points;
+  /// Small raised digit (exponent).
+  static _Glyph _superscript(String digit) {
+    final base = _glyph(digit)!;
+    return _Glyph(base.advance * 0.55, [
+      for (final p in base.paths)
+        (s) => _ScaledPath.wrap(p(s * 0.55).path.shift(Offset(0, -0.04 * s))),
+    ]);
   }
+
+  /// A small round dot (decimal point, colon, division sign) centred at
+  /// ([x], [y]), visible at any pen width.
+  static _ScaledPath _dot(double s, double x, double y) =>
+      _p(s)..addOval(Rect.fromCircle(center: Offset(x * s, y * s), radius: 0.028 * s));
+
+  /// New path that interprets coordinates in units of size [s].
+  static _ScaledPath _p(double s) => _ScaledPath(s);
+
+  static Rect _r(double l, double t, double w, double h, double s) =>
+      Rect.fromLTWH(l * s, t * s, w * s, h * s);
+}
+
+class _Glyph {
+  final double advance; // width in units of letter height
+  final List<_ScaledPath Function(double size)> paths;
+  const _Glyph(this.advance, this.paths);
+}
+
+/// Builds a [Path] from coordinates given in units of letter height
+/// (multiplied by [s]), so glyphs are designed once and drawn at any size.
+class _ScaledPath {
+  _ScaledPath(this.s) : path = Path();
+  _ScaledPath.wrap(this.path) : s = 1;
+
+  final double s;
+  final Path path;
+
+  void moveTo(double x, double y) => path.moveTo(x * s, y * s);
+  void lineTo(double x, double y) => path.lineTo(x * s, y * s);
+  void quadraticBezierTo(double x1, double y1, double x2, double y2) =>
+      path.quadraticBezierTo(x1 * s, y1 * s, x2 * s, y2 * s);
+  void cubicTo(double x1, double y1, double x2, double y2, double x3, double y3) =>
+      path.cubicTo(x1 * s, y1 * s, x2 * s, y2 * s, x3 * s, y3 * s);
+  void addOval(Rect r) => path.addOval(r);
 }

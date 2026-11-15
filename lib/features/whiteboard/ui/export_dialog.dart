@@ -45,7 +45,8 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
             // Format Option 1: PDF Document
             _ExportFormatCard(
               title: 'Multi-Page PDF Document',
-              subtitle: 'Complete lesson with all ${state.project.totalPages} pages for students and classrooms.',
+              subtitle:
+                  'Complete lesson with all ${state.project.totalPages} pages for students and classrooms.',
               icon: Icons.picture_as_pdf_rounded,
               iconColor: Colors.red,
               isSelected: _selectedFormat == ExportFormat.pdf,
@@ -58,7 +59,8 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
             // Format Option 2: High-Res PNG Image
             _ExportFormatCard(
               title: 'High-Res PNG Image',
-              subtitle: 'Crisp snapshot of current page ${state.project.currentPageIndex + 1}.',
+              subtitle:
+                  'Crisp snapshot of current page ${state.project.currentPageIndex + 1}.',
               icon: Icons.image_rounded,
               iconColor: theme.colorScheme.primary,
               isSelected: _selectedFormat == ExportFormat.png,
@@ -129,7 +131,8 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
         setState(() => _statusMessage = 'Rendering PNG image...');
         final pngFile = await ExportService.exportPageAsPng(
           page: state.project.currentPage,
-          fileName: '${sanitizedTitle}_page_${state.project.currentPageIndex + 1}',
+          fileName:
+              '${sanitizedTitle}_page_${state.project.currentPageIndex + 1}',
         );
         setState(() => _statusMessage = 'Opening share sheet...');
         await ShareService.shareFile(
@@ -152,7 +155,10 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
           _statusMessage = null;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Export failed: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Export failed: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -194,7 +200,9 @@ class _ExportFormatCard extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: isSelected ? theme.colorScheme.primary : Colors.grey.shade300,
+              color: isSelected
+                  ? theme.colorScheme.primary
+                  : Colors.grey.shade300,
               width: isSelected ? 2 : 1,
             ),
           ),
@@ -230,7 +238,11 @@ class _ExportFormatCard extends StatelessWidget {
                 ),
               ),
               if (isSelected)
-                Icon(Icons.check_circle_rounded, color: theme.colorScheme.primary, size: 20),
+                Icon(
+                  Icons.check_circle_rounded,
+                  color: theme.colorScheme.primary,
+                  size: 20,
+                ),
             ],
           ),
         ),
@@ -238,4 +250,3 @@ class _ExportFormatCard extends StatelessWidget {
     );
   }
 }
-

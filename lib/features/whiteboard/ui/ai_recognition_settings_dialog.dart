@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/ai/ai_config.dart';
 import '../state/whiteboard_notifier.dart';
 
 class AiRecognitionSettingsDialog extends ConsumerWidget {
@@ -59,6 +60,12 @@ class AiRecognitionSettingsDialog extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Builds with a built-in key never show key settings to users.
+              if (!AiConfig.hasBuiltInKey) ...[
+                const _AiProviderSection(),
+                const Divider(height: 24),
+              ],
+
               // 1. Auto Shape Detection Switch
               SwitchListTile(
                 dense: true,
@@ -69,7 +76,11 @@ class AiRecognitionSettingsDialog extends ConsumerWidget {
                     color: Colors.blue.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.interests_outlined, color: Colors.blue, size: 20),
+                  child: const Icon(
+                    Icons.interests_outlined,
+                    color: Colors.blue,
+                    size: 20,
+                  ),
                 ),
                 title: const Text(
                   'Auto Shape Detection',
@@ -81,7 +92,9 @@ class AiRecognitionSettingsDialog extends ConsumerWidget {
                 ),
                 value: state.isAutoShapeEnabled,
                 onChanged: (val) {
-                  ref.read(whiteboardControllerProvider.notifier).setAutoShape(val);
+                  ref
+                      .read(whiteboardControllerProvider.notifier)
+                      .setAutoShape(val);
                 },
               ),
 
@@ -97,7 +110,11 @@ class AiRecognitionSettingsDialog extends ConsumerWidget {
                     color: const Color(0xFF059669).withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.calculate_outlined, color: Color(0xFF059669), size: 20),
+                  child: const Icon(
+                    Icons.calculate_outlined,
+                    color: Color(0xFF059669),
+                    size: 20,
+                  ),
                 ),
                 title: const Text(
                   'Auto Math Solver',
@@ -109,7 +126,9 @@ class AiRecognitionSettingsDialog extends ConsumerWidget {
                 ),
                 value: state.isAutoMathEnabled,
                 onChanged: (val) {
-                  ref.read(whiteboardControllerProvider.notifier).setAutoMath(val);
+                  ref
+                      .read(whiteboardControllerProvider.notifier)
+                      .setAutoMath(val);
                 },
               ),
 
@@ -120,7 +139,9 @@ class AiRecognitionSettingsDialog extends ConsumerWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF0F172A) : const Color(0xFFEFF6FF),
+                  color: isDark
+                      ? const Color(0xFF0F172A)
+                      : const Color(0xFFEFF6FF),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: const Color(0xFF3B82F6).withValues(alpha: 0.25),
@@ -155,7 +176,9 @@ class AiRecognitionSettingsDialog extends ConsumerWidget {
                             style: TextStyle(
                               fontSize: 12,
                               height: 1.4,
-                              color: isDark ? Colors.white70 : const Color(0xFF1E3A8A),
+                              color: isDark
+                                  ? Colors.white70
+                                  : const Color(0xFF1E3A8A),
                             ),
                           ),
                         ],
@@ -172,10 +195,14 @@ class AiRecognitionSettingsDialog extends ConsumerWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1E222B) : const Color(0xFFF9FAFB),
+                  color: isDark
+                      ? const Color(0xFF1E222B)
+                      : const Color(0xFFF9FAFB),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: isDark ? const Color(0xFF374151) : const Color(0xFFE5E7EB),
+                    color: isDark
+                        ? const Color(0xFF374151)
+                        : const Color(0xFFE5E7EB),
                   ),
                 ),
                 child: const Row(
@@ -204,6 +231,137 @@ class AiRecognitionSettingsDialog extends ConsumerWidget {
         FilledButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Done'),
+        ),
+      ],
+    );
+  }
+}
+
+/// API key + model configuration for every AI feature (vision math solver,
+/// assistant, diagram generation). The key is stored on this device only.
+class _AiProviderSection extends ConsumerStatefulWidget {
+  const _AiProviderSection();
+
+  @override
+  ConsumerState<_AiProviderSection> createState() => _AiProviderSectionState();
+}
+
+class _AiProviderSectionState extends ConsumerState<_AiProviderSection> {
+  late final TextEditingController _key;
+  late final TextEditingController _model;
+  bool _obscure = true;
+  bool _saved = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final c = ref.read(aiConfigProvider);
+    _key = TextEditingController(text: c.userApiKey);
+    _model = TextEditingController(text: c.model);
+  }
+
+  @override
+  void dispose() {
+    _key.dispose();
+    _model.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    await ref
+        .read(aiConfigProvider.notifier)
+        .update(apiKey: _key.text, model: _model.text);
+    if (mounted) setState(() => _saved = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final config = ref.watch(aiConfigProvider);
+    final status = config.isConfigured
+        ? (config.usesBuildTimeKey
+              ? 'Using build-time key'
+              : 'AI is configured')
+        : 'Not configured - AI features are disabled';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              config.isConfigured
+                  ? Icons.check_circle_rounded
+                  : Icons.key_off_rounded,
+              size: 18,
+              color: config.isConfigured
+                  ? const Color(0xFF059669)
+                  : Colors.orange,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'AI Provider (OpenRouter)',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+            const Spacer(),
+            Text(
+              status,
+              style: const TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _key,
+          obscureText: _obscure,
+          autocorrect: false,
+          enableSuggestions: false,
+          onChanged: (_) => setState(() => _saved = false),
+          decoration: InputDecoration(
+            isDense: true,
+            labelText: 'API key',
+            hintText: 'sk-or-...',
+            border: const OutlineInputBorder(),
+            suffixIcon: IconButton(
+              tooltip: _obscure ? 'Show key' : 'Hide key',
+              icon: Icon(
+                _obscure
+                    ? Icons.visibility_rounded
+                    : Icons.visibility_off_rounded,
+                size: 18,
+              ),
+              onPressed: () => setState(() => _obscure = !_obscure),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _model,
+          autocorrect: false,
+          onChanged: (_) => setState(() => _saved = false),
+          decoration: const InputDecoration(
+            isDense: true,
+            labelText: 'Model (must support images for handwriting & photos)',
+            hintText: AiConfig.defaultModel,
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Stored only on this device. Board images and text are sent to OpenRouter when you use AI.',
+                style: TextStyle(fontSize: 11, color: Colors.grey),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: _save,
+              icon: Icon(
+                _saved ? Icons.check_rounded : Icons.save_rounded,
+                size: 16,
+              ),
+              label: Text(_saved ? 'Saved' : 'Save'),
+            ),
+          ],
         ),
       ],
     );

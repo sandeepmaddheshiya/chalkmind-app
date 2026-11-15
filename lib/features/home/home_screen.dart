@@ -5,6 +5,7 @@ import '../whiteboard/models/background_style.dart';
 import '../whiteboard/models/page_model.dart';
 import '../whiteboard/models/project_model.dart';
 import '../whiteboard/state/whiteboard_notifier.dart';
+import '../whiteboard/pdf/pdf_import_flow.dart';
 import '../whiteboard/ui/whiteboard_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -61,18 +62,48 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
 
     Navigator.of(context)
-        .push(
-          MaterialPageRoute(builder: (_) => const WhiteboardScreen()),
-        )
+        .push(MaterialPageRoute(builder: (_) => const WhiteboardScreen()))
         .then((_) => _loadData());
   }
 
-  void _openExistingBoard(ProjectModel project) {
+  /// Import a PDF as a new board (one board page per PDF page).
+  Future<void> _importPdf() async {
+    final result = await PdfImportFlow.pickAndImport(context);
+    if (result == null || !mounted) return;
+    final name = result.pages.first.pdf?.sourceName ?? 'PDF';
+    final title = name.toLowerCase().endsWith('.pdf')
+        ? name.substring(0, name.length - 4)
+        : name;
+    final project = ProjectModel.createEmpty(
+      title: title,
+    ).copyWith(pages: result.pages, currentPageIndex: 0);
+    try {
+      await ref.read(projectStorageProvider).saveProject(project);
+    } catch (e) {
+      debugPrint('Could not save imported board: $e');
+    }
+    if (!mounted) return;
+    _openExistingBoard(project);
+  }
+
+  Future<void> _openExistingBoard(ProjectModel project) async {
+    // The list holds lightweight summaries; load the full board to open it.
+    if (project.isSummary) {
+      final full = await ref.read(projectStorageProvider).loadProject(project.id);
+      if (!mounted) return;
+      if (full == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This board could not be opened. It may have been deleted.')),
+        );
+        await _loadData();
+        return;
+      }
+      project = full;
+    }
+    if (!mounted) return;
     ref.read(whiteboardControllerProvider.notifier).loadProject(project);
     Navigator.of(context)
-        .push(
-          MaterialPageRoute(builder: (_) => const WhiteboardScreen()),
-        )
+        .push(MaterialPageRoute(builder: (_) => const WhiteboardScreen()))
         .then((_) => _loadData());
   }
 
@@ -85,9 +116,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         _recoverableProject = null;
       });
       Navigator.of(context)
-          .push(
-            MaterialPageRoute(builder: (_) => const WhiteboardScreen()),
-          )
+          .push(MaterialPageRoute(builder: (_) => const WhiteboardScreen()))
           .then((_) => _loadData());
     }
   }
@@ -143,7 +172,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 color: theme.colorScheme.primary,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.gesture_rounded, color: Colors.white, size: 18),
+              child: const Icon(
+                Icons.gesture_rounded,
+                color: Colors.white,
+                size: 18,
+              ),
             ),
             const SizedBox(width: 12),
             Column(
@@ -151,24 +184,62 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               children: [
                 const Text(
                   'BoardFlow',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17, letterSpacing: -0.4),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 17,
+                    letterSpacing: -0.4,
+                  ),
                 ),
                 Text(
                   'Whiteboard & Studio',
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey.shade500,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),
           ],
         ),
         actions: [
+          if (MediaQuery.sizeOf(context).width >= 600)
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+              label: const Text(
+                'Import PDF',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              ),
+              onPressed: _importPdf,
+            )
+          else
+            IconButton(
+              tooltip: 'Import PDF',
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              onPressed: _importPdf,
+            ),
+          const SizedBox(width: 8),
           FilledButton.icon(
             style: FilledButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             icon: const Icon(Icons.add_rounded, size: 18),
-            label: const Text('New Board', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            label: const Text(
+              'New Board',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
             onPressed: () => _openNewBoard(),
           ),
           const SizedBox(width: 8),
@@ -192,32 +263,48 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               if (_recoverableProject != null) ...[
                 Container(
                   margin: const EdgeInsets.only(bottom: 20),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF261E14) : const Color(0xFFFEF3C7),
+                    color: isDark
+                        ? const Color(0xFF261E14)
+                        : const Color(0xFFFEF3C7),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: isDark ? const Color(0xFF78350F) : const Color(0xFFFDE68A),
+                      color: isDark
+                          ? const Color(0xFF78350F)
+                          : const Color(0xFFFDE68A),
                       width: 1,
                     ),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.restore_rounded, color: Color(0xFFD97706), size: 22),
+                      const Icon(
+                        Icons.restore_rounded,
+                        color: Color(0xFFD97706),
+                        size: 22,
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           'Unsaved draft from previous session is available.',
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
-                            color: isDark ? const Color(0xFFFCD34D) : const Color(0xFF92400E),
+                            color: isDark
+                                ? const Color(0xFFFCD34D)
+                                : const Color(0xFF92400E),
                             fontSize: 13,
                           ),
                         ),
                       ),
                       TextButton(
                         onPressed: _restoreRecoveredBoard,
-                        child: const Text('Restore', style: TextStyle(fontWeight: FontWeight.bold)),
+                        child: const Text(
+                          'Restore',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
                       ),
                       IconButton(
                         icon: const Icon(Icons.close, size: 16),
@@ -234,7 +321,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 children: [
                   const Text(
                     'Canvas Templates',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: -0.2),
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.2,
+                    ),
                   ),
                   Text(
                     'Instant Start',
@@ -341,19 +432,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               else if (_recentProjects.isEmpty)
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 40,
+                    horizontal: 20,
+                  ),
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1F2937) : Colors.grey.shade100,
+                    color: isDark
+                        ? const Color(0xFF1F2937)
+                        : Colors.grey.shade100,
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Column(
                     children: [
-                      Icon(Icons.dashboard_customize_outlined,
-                          size: 48, color: Colors.grey.shade400),
+                      Icon(
+                        Icons.dashboard_customize_outlined,
+                        size: 48,
+                        color: Colors.grey.shade400,
+                      ),
                       const SizedBox(height: 12),
                       const Text(
                         'No saved whiteboards yet',
-                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
                       ),
                       const SizedBox(height: 6),
                       const Text(
@@ -424,11 +526,19 @@ class _TemplateCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(icon, color: Theme.of(context).colorScheme.primary, size: 20),
+              Icon(
+                icon,
+                color: Theme.of(context).colorScheme.primary,
+                size: 20,
+              ),
               const SizedBox(height: 8),
               Text(
                 title,
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, letterSpacing: -0.2),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  letterSpacing: -0.2,
+                ),
               ),
               const SizedBox(height: 2),
               Text(
@@ -486,7 +596,9 @@ class _ProjectListItem extends StatelessWidget {
                   color: firstPage.background.color,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: isDark ? const Color(0xFF2E333F) : const Color(0xFFD6D3CC),
+                    color: isDark
+                        ? const Color(0xFF2E333F)
+                        : const Color(0xFFD6D3CC),
                   ),
                 ),
                 child: Center(
@@ -531,7 +643,9 @@ class _ProjectListItem extends StatelessWidget {
                             vertical: 1,
                           ),
                           decoration: BoxDecoration(
-                            color: isDark ? const Color(0xFF262A34) : const Color(0xFFEAE8E2),
+                            color: isDark
+                                ? const Color(0xFF262A34)
+                                : const Color(0xFFEAE8E2),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
@@ -549,8 +663,11 @@ class _ProjectListItem extends StatelessWidget {
               ),
 
               IconButton(
-                icon: const Icon(Icons.delete_outline_rounded,
-                    color: Colors.redAccent, size: 18),
+                icon: const Icon(
+                  Icons.delete_outline_rounded,
+                  color: Colors.redAccent,
+                  size: 18,
+                ),
                 tooltip: 'Delete Board',
                 onPressed: onDelete,
               ),

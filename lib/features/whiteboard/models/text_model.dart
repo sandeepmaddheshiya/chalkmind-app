@@ -22,19 +22,30 @@ class TextObject {
   Color get color => Color(colorValue);
 
   TextStyle get style => TextStyle(
-        fontSize: fontSize,
-        color: color,
-        fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-        fontStyle: isItalic ? FontStyle.italic : FontStyle.normal,
-        fontFamily: 'Roboto',
-      );
+    fontSize: fontSize,
+    color: color,
+    fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+    fontStyle: isItalic ? FontStyle.italic : FontStyle.normal,
+    fontFamily: 'Roboto',
+  );
 
-  Rect get bounds {
-    final textSpan = TextSpan(text: text.isEmpty ? ' ' : text, style: style);
-    final textPainter = TextPainter(
-      text: textSpan,
-      textDirection: TextDirection.ltr,
-    )..layout();
+  // Text layout is expensive (~40µs per object). Bounds are immutable for a
+  // given TextObject, so cache them per instance.
+  static final Expando<Rect> _boundsCache = Expando<Rect>('TextObject.bounds');
+  static final Expando<TextPainter> _painterCache = Expando<TextPainter>(
+    'TextObject.painter',
+  );
+
+  /// Laid-out painter, cached per instance (used for painting and bounds).
+  TextPainter get layoutPainter => _painterCache[this] ??= TextPainter(
+    text: TextSpan(text: text.isEmpty ? ' ' : text, style: style),
+    textDirection: TextDirection.ltr,
+  )..layout();
+
+  Rect get bounds => _boundsCache[this] ??= _computeBounds();
+
+  Rect _computeBounds() {
+    final textPainter = layoutPainter;
 
     final padding = 8.0;
     return Rect.fromLTWH(
@@ -50,7 +61,7 @@ class TextObject {
   }
 
   TextObject translate(Offset delta) {
-    return TextObject(
+    final moved = TextObject(
       id: id,
       text: text,
       position: position + delta,
@@ -59,6 +70,12 @@ class TextObject {
       isBold: isBold,
       isItalic: isItalic,
     );
+    // Translation doesn't change size: carry the cached layout over.
+    final cached = _boundsCache[this];
+    if (cached != null) _boundsCache[moved] = cached.shift(delta);
+    final painter = _painterCache[this];
+    if (painter != null) _painterCache[moved] = painter;
+    return moved;
   }
 
   TextObject copyWith({

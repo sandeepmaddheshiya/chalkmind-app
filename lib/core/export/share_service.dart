@@ -12,11 +12,7 @@ class ShareService {
     try {
       final xFile = XFile(file.path);
       await SharePlus.instance.share(
-        ShareParams(
-          files: [xFile],
-          subject: subject,
-          text: text,
-        ),
+        ShareParams(files: [xFile], subject: subject, text: text),
       );
     } catch (e) {
       debugPrint('Error invoking system share: $e');

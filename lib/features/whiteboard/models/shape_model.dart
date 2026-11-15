@@ -11,7 +11,8 @@ class ShapeObject {
   final double strokeWidth;
   final int? fillColorValue;
   final bool isFilled;
-  final List<Offset>? customVertices; // For authentic triangles, stars, polygons
+  final List<Offset>?
+  customVertices; // For authentic triangles, stars, polygons
 
   const ShapeObject({
     required this.id,
@@ -26,7 +27,8 @@ class ShapeObject {
   });
 
   Color get strokeColor => Color(strokeColorValue);
-  Color? get fillColor => fillColorValue != null ? Color(fillColorValue!) : null;
+  Color? get fillColor =>
+      fillColorValue != null ? Color(fillColorValue!) : null;
 
   Rect get bounds {
     if (customVertices != null && customVertices!.isNotEmpty) {
@@ -42,7 +44,12 @@ class ShapeObject {
         if (v.dy > maxY) maxY = v.dy;
       }
       final padding = strokeWidth * 1.5;
-      return Rect.fromLTRB(minX - padding, minY - padding, maxX + padding, maxY + padding);
+      return Rect.fromLTRB(
+        minX - padding,
+        minY - padding,
+        maxX + padding,
+        maxY + padding,
+      );
     }
 
     final left = math.min(start.dx, end.dx);
@@ -80,7 +87,8 @@ class ShapeObject {
     switch (shapeType) {
       case ShapeType.line:
       case ShapeType.arrow:
-        return _distToSegment(point, start, end) <= (strokeWidth / 2 + threshold);
+        return _distToSegment(point, start, end) <=
+            (strokeWidth / 2 + threshold);
       case ShapeType.rectangle:
         final r = Rect.fromPoints(start, end);
         final outer = r.inflate(strokeWidth / 2 + threshold);
@@ -117,7 +125,10 @@ class ShapeObject {
         ((p.dx - v.dx) * (w.dx - v.dx) + (p.dy - v.dy) * (w.dy - v.dy)) / l2,
       ),
     );
-    final projection = Offset(v.dx + t * (w.dx - v.dx), v.dy + t * (w.dy - v.dy));
+    final projection = Offset(
+      v.dx + t * (w.dx - v.dx),
+      v.dy + t * (w.dy - v.dy),
+    );
     return (p - projection).distance;
   }
 
@@ -191,10 +202,12 @@ class ShapeObject {
       fillColorValue: json['fillColorValue'] as int?,
       isFilled: json['isFilled'] as bool? ?? false,
       customVertices: verts
-          ?.map((v) => Offset(
-                (v['dx'] as num).toDouble(),
-                (v['dy'] as num).toDouble(),
-              ))
+          ?.map(
+            (v) => Offset(
+              (v['dx'] as num).toDouble(),
+              (v['dy'] as num).toDouble(),
+            ),
+          )
           .toList(),
     );
   }

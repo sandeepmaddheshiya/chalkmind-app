@@ -9,9 +9,7 @@ class StrokeSmoother {
     if (points.isEmpty) return path;
 
     if (points.length == 1) {
-      path.addOval(
-        Rect.fromCircle(center: points.first.offset, radius: 0.5),
-      );
+      path.addOval(Rect.fromCircle(center: points.first.offset, radius: 0.5));
       return path;
     }
 

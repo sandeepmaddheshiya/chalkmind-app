@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart' show ValueListenable;
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/background_style.dart';
 
@@ -7,12 +9,19 @@ class BackgroundPainter extends CustomPainter {
   final Rect? pageBounds;
   final Matrix4? transform;
 
+  /// When set, the painter repaints (without a widget rebuild) whenever the
+  /// canvas transform changes, reading the live matrix at paint time.
+  final ValueListenable<Matrix4>? transformListenable;
+
   const BackgroundPainter({
     required this.background,
     this.isInfiniteCanvas = false,
     this.pageBounds,
     this.transform,
-  });
+    this.transformListenable,
+  }) : super(repaint: transformListenable);
+
+  Matrix4? get _matrix => transformListenable?.value ?? transform;
 
   // Standard high-definition paginated sheet size (A4 / Tablet presentation standard)
   static const Rect defaultPageRect = Rect.fromLTWH(40, 40, 1100, 1550);
@@ -35,7 +44,7 @@ class BackgroundPainter extends CustomPainter {
 
     if (background.style == BackgroundStyle.plain) return;
 
-    final matrix = transform ?? Matrix4.identity();
+    final matrix = _matrix ?? Matrix4.identity();
     final spacing = background.spacing.clamp(16.0, 120.0);
 
     // Compute visible scene rectangle using inverse matrix
@@ -47,7 +56,10 @@ class BackgroundPainter extends CustomPainter {
     }
 
     final p1 = MatrixUtils.transformPoint(inverse, Offset.zero);
-    final p2 = MatrixUtils.transformPoint(inverse, Offset(size.width, size.height));
+    final p2 = MatrixUtils.transformPoint(
+      inverse,
+      Offset(size.width, size.height),
+    );
     final p3 = MatrixUtils.transformPoint(inverse, Offset(size.width, 0));
     final p4 = MatrixUtils.transformPoint(inverse, Offset(0, size.height));
 
@@ -76,10 +88,12 @@ class BackgroundPainter extends CustomPainter {
 
     // 1. Paint desk / studio background surface outside the page sheet
     final isDark = background.isDark;
-    final deskColor = isDark ? const Color(0xFF0F172A) : const Color(0xFFE2E8F0);
+    final deskColor = isDark
+        ? const Color(0xFF0F172A)
+        : const Color(0xFFE2E8F0);
     canvas.drawRect(viewportRect, Paint()..color = deskColor);
 
-    final matrix = transform ?? Matrix4.identity();
+    final matrix = _matrix ?? Matrix4.identity();
     canvas.save();
     canvas.transform(matrix.storage);
 
@@ -137,13 +151,21 @@ class BackgroundPainter extends CustomPainter {
         // Draw vertical lines
         double x = bounds.left + (spacing - (bounds.left % spacing));
         while (x < bounds.right) {
-          canvas.drawLine(Offset(x, bounds.top), Offset(x, bounds.bottom), patternPaint);
+          canvas.drawLine(
+            Offset(x, bounds.top),
+            Offset(x, bounds.bottom),
+            patternPaint,
+          );
           x += spacing;
         }
         // Draw horizontal lines
         double y = bounds.top + (spacing - (bounds.top % spacing));
         while (y < bounds.bottom) {
-          canvas.drawLine(Offset(bounds.left, y), Offset(bounds.right, y), patternPaint);
+          canvas.drawLine(
+            Offset(bounds.left, y),
+            Offset(bounds.right, y),
+            patternPaint,
+          );
           y += spacing;
         }
         break;
@@ -152,7 +174,11 @@ class BackgroundPainter extends CustomPainter {
         // Notebook ruled lines
         double y = bounds.top + (spacing - (bounds.top % spacing));
         while (y < bounds.bottom) {
-          canvas.drawLine(Offset(bounds.left, y), Offset(bounds.right, y), patternPaint);
+          canvas.drawLine(
+            Offset(bounds.left, y),
+            Offset(bounds.right, y),
+            patternPaint,
+          );
           y += spacing;
         }
 
@@ -219,6 +245,98 @@ class BackgroundPainter extends CustomPainter {
           stepY++;
         }
         break;
+
+      case BackgroundStyle.isometric:
+        // 3D Isometric equilateral grid (30-degree diagonals and horizontal lines)
+        final isoSpacing = spacing.clamp(20.0, 80.0);
+        final rowHeight = isoSpacing * math.sqrt(3) / 2;
+
+        // 1. Horizontal lines
+        double hy = bounds.top + (rowHeight - (bounds.top % rowHeight));
+        while (hy < bounds.bottom) {
+          canvas.drawLine(
+            Offset(bounds.left, hy),
+            Offset(bounds.right, hy),
+            patternPaint,
+          );
+          hy += rowHeight;
+        }
+
+        // 2. 30-degree and -30-degree diagonal lines
+        final diagSpacing = isoSpacing;
+        final startX = bounds.left - bounds.height * math.sqrt(3);
+        final endX = bounds.right + bounds.height * math.sqrt(3);
+
+        double dx = startX;
+        while (dx < endX) {
+          final p1 = Offset(dx, bounds.top);
+          final p2 = Offset(dx + bounds.height / math.sqrt(3), bounds.bottom);
+          canvas.drawLine(p1, p2, patternPaint);
+
+          final p3 = Offset(dx, bounds.top);
+          final p4 = Offset(dx - bounds.height / math.sqrt(3), bounds.bottom);
+          canvas.drawLine(p3, p4, patternPaint);
+
+          dx += diagSpacing;
+        }
+        break;
+
+      case BackgroundStyle.polar:
+        // Concentric circles with radial angle lines
+        final center = bounds.center;
+        final maxR =
+            math.sqrt(
+              bounds.width * bounds.width + bounds.height * bounds.height,
+            ) /
+            2;
+        final radialStep = spacing.clamp(24.0, 90.0);
+
+        // Concentric circles
+        double r = radialStep;
+        int circleIndex = 1;
+        while (r <= maxR) {
+          final isMajor = (circleIndex % 5 == 0);
+          final cPaint = isMajor
+              ? (Paint()
+                  ..color = isDark
+                      ? const Color(0x45FFFFFF)
+                      : const Color(0x3B000000)
+                  ..strokeWidth = 1.3
+                  ..style = PaintingStyle.stroke)
+              : patternPaint;
+          canvas.drawCircle(center, r, cPaint);
+          r += radialStep;
+          circleIndex++;
+        }
+
+        // Radial rays every 15 degrees
+        for (int deg = 0; deg < 360; deg += 15) {
+          final isMajor = (deg % 90 == 0);
+          final isMedium = (deg % 45 == 0);
+          final rayPaint = isMajor
+              ? (Paint()
+                  ..color = isDark
+                      ? const Color(0x66FFFFFF)
+                      : const Color(0x55000000)
+                  ..strokeWidth = 1.5
+                  ..style = PaintingStyle.stroke)
+              : (isMedium
+                    ? (Paint()
+                        ..color = isDark
+                            ? const Color(0x3BFFFFFF)
+                            : const Color(0x33000000)
+                        ..strokeWidth = 1.1
+                        ..style = PaintingStyle.stroke)
+                    : patternPaint);
+
+          final rad = deg * math.pi / 180;
+          final rayEnd = Offset(
+            center.dx + maxR * math.cos(rad),
+            center.dy + maxR * math.sin(rad),
+          );
+          canvas.drawLine(center, rayEnd, rayPaint);
+        }
+        break;
     }
   }
 
@@ -227,6 +345,7 @@ class BackgroundPainter extends CustomPainter {
     return oldDelegate.background != background ||
         oldDelegate.isInfiniteCanvas != isInfiniteCanvas ||
         oldDelegate.pageBounds != pageBounds ||
-        oldDelegate.transform != transform;
+        oldDelegate.transform != transform ||
+        oldDelegate.transformListenable != transformListenable;
   }
 }

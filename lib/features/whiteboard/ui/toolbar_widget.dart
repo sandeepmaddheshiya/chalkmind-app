@@ -23,16 +23,16 @@ class WhiteboardToolbar extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final tools = [
-      (ToolType.pen, Icons.edit_rounded, 'Pen'),
+      (ToolType.pen, Icons.edit_rounded, 'Pen (P)'),
       (ToolType.pencil, Icons.mode_edit_outline_rounded, 'Pencil'),
-      (ToolType.marker, Icons.brush_rounded, 'Marker'),
-      (ToolType.highlighter, Icons.border_color_rounded, 'Highlighter'),
-      (ToolType.strokeEraser, Icons.auto_fix_normal_rounded, 'Eraser'),
-      (ToolType.shape, Icons.category_rounded, 'Shapes'),
-      (ToolType.text, Icons.title_rounded, 'Text'),
-      (ToolType.select, Icons.highlight_alt_rounded, 'Select'),
-      (ToolType.laser, Icons.flare_rounded, 'Laser'),
-      (ToolType.hand, Icons.pan_tool_rounded, 'Pan Canvas'),
+      (ToolType.marker, Icons.brush_rounded, 'Marker (M)'),
+      (ToolType.highlighter, Icons.border_color_rounded, 'Highlighter (H)'),
+      (ToolType.strokeEraser, Icons.auto_fix_normal_rounded, 'Eraser (E)'),
+      (ToolType.shape, Icons.category_rounded, 'Shapes (S)'),
+      (ToolType.text, Icons.title_rounded, 'Text (T)'),
+      (ToolType.select, Icons.highlight_alt_rounded, 'Select (V)'),
+      (ToolType.laser, Icons.flare_rounded, 'Laser (L)'),
+      (ToolType.hand, Icons.pan_tool_rounded, 'Pan Canvas (Space)'),
     ];
 
     return Container(
@@ -80,7 +80,9 @@ class WhiteboardToolbar extends ConsumerWidget {
                 height: 38,
                 decoration: BoxDecoration(
                   color: isPropertiesOpen
-                      ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)
+                      ? Theme.of(
+                          context,
+                        ).colorScheme.primary.withValues(alpha: 0.15)
                       : Colors.transparent,
                   shape: BoxShape.circle,
                 ),
@@ -91,10 +93,7 @@ class WhiteboardToolbar extends ConsumerWidget {
                     decoration: BoxDecoration(
                       color: state.selectedColor,
                       shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Colors.white,
-                        width: 2,
-                      ),
+                      border: Border.all(color: Colors.white, width: 2),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.2),
@@ -117,17 +116,41 @@ class WhiteboardToolbar extends ConsumerWidget {
 
           // Tool buttons
           for (final item in tools) ...[
-            _ToolIconButton(
-              icon: item.$2,
-              tooltip: item.$3,
-              isSelected: state.currentTool == item.$1,
-              presetColor: state.toolPresets[item.$1]?.color,
-              onPressed: () {
-                ref
-                    .read(whiteboardControllerProvider.notifier)
-                    .setTool(item.$1);
-              },
-            ),
+            if (item.$1 == ToolType.strokeEraser)
+              // One eraser button: tap again to switch whole-stroke <-> partial.
+              _ToolIconButton(
+                icon: state.currentTool == ToolType.areaEraser
+                    ? Icons.cleaning_services_rounded
+                    : item.$2,
+                tooltip: state.currentTool == ToolType.areaEraser
+                    ? 'Partial Eraser (E) - erases only ink under the cursor. Tap to switch to whole-stroke.'
+                    : state.currentTool == ToolType.strokeEraser
+                    ? 'Stroke Eraser (E) - removes whole strokes. Tap to switch to partial.'
+                    : 'Eraser (E)',
+                isSelected: state.currentTool.isEraser,
+                onPressed: () {
+                  final n = ref.read(whiteboardControllerProvider.notifier);
+                  if (state.currentTool == ToolType.strokeEraser) {
+                    n.setTool(ToolType.areaEraser);
+                  } else if (state.currentTool == ToolType.areaEraser) {
+                    n.setTool(ToolType.strokeEraser);
+                  } else {
+                    n.setTool(ToolType.strokeEraser);
+                  }
+                },
+              )
+            else
+              _ToolIconButton(
+                icon: item.$2,
+                tooltip: item.$3,
+                isSelected: state.currentTool == item.$1,
+                presetColor: state.toolPresets[item.$1]?.color,
+                onPressed: () {
+                  ref
+                      .read(whiteboardControllerProvider.notifier)
+                      .setTool(item.$1);
+                },
+              ),
             const SizedBox(height: 4),
           ],
 
@@ -142,9 +165,7 @@ class WhiteboardToolbar extends ConsumerWidget {
           // Left/Right Handed Dock Toggle
           IconButton(
             icon: Icon(
-              state.isLeftHanded
-                  ? Icons.dock_rounded
-                  : Icons.dock_outlined,
+              state.isLeftHanded ? Icons.dock_rounded : Icons.dock_outlined,
               size: 19,
             ),
             tooltip: state.isLeftHanded
@@ -199,7 +220,9 @@ class _ToolIconButton extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: isSelected ? primary.withValues(alpha: 0.15) : Colors.transparent,
+        color: isSelected
+            ? primary.withValues(alpha: 0.15)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
@@ -234,7 +257,9 @@ class _ToolIconButton extends StatelessWidget {
                         color: presetColor,
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: isDark ? const Color(0xFF1F2937) : Colors.white,
+                          color: isDark
+                              ? const Color(0xFF1F2937)
+                              : Colors.white,
                           width: 1.2,
                         ),
                         boxShadow: [

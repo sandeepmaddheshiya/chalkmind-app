@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/project_model.dart';
 import '../models/tool_type.dart';
+import '../pdf/pdf_text_index.dart';
 import '../recognition/handwriting_math_engine.dart';
 import '../recognition/math_evaluator.dart';
 import '../recognition/shape_detector.dart';
@@ -24,6 +25,12 @@ class WhiteboardState {
   final MathEvaluationResult? detectedMathResult;
   final HandwritingMathResult? handwritingMathResult;
   final bool isCalculatingMath;
+
+  /// User-facing message from the last failed AI request (null = no error).
+  final String? aiErrorMessage;
+
+  /// Text just highlighted on a PDF page, offered for look-up (null = none).
+  final HighlightedText? pdfLookup;
   final bool isAutoShapeEnabled;
   final bool isAutoMathEnabled;
   final bool isInfiniteCanvas;
@@ -43,6 +50,8 @@ class WhiteboardState {
     this.isLeftHanded = false,
     this.isSaving = false,
     this.isCalculatingMath = false,
+    this.aiErrorMessage,
+    this.pdfLookup,
     this.isAutoShapeEnabled = true,
     this.isAutoMathEnabled = true,
     this.isInfiniteCanvas = false,
@@ -70,6 +79,8 @@ class WhiteboardState {
     bool? isLeftHanded,
     bool? isSaving,
     bool? isCalculatingMath,
+    String? Function()? aiErrorMessage,
+    HighlightedText? Function()? pdfLookup,
     bool? isAutoShapeEnabled,
     bool? isAutoMathEnabled,
     bool? isInfiniteCanvas,
@@ -94,14 +105,24 @@ class WhiteboardState {
       isLeftHanded: isLeftHanded ?? this.isLeftHanded,
       isSaving: isSaving ?? this.isSaving,
       isCalculatingMath: isCalculatingMath ?? this.isCalculatingMath,
+      aiErrorMessage: aiErrorMessage != null
+          ? aiErrorMessage()
+          : this.aiErrorMessage,
+      pdfLookup: pdfLookup != null ? pdfLookup() : this.pdfLookup,
       isAutoShapeEnabled: isAutoShapeEnabled ?? this.isAutoShapeEnabled,
       isAutoMathEnabled: isAutoMathEnabled ?? this.isAutoMathEnabled,
       isInfiniteCanvas: isInfiniteCanvas ?? this.isInfiniteCanvas,
       zoomScale: zoomScale ?? this.zoomScale,
       panOffset: panOffset ?? this.panOffset,
-      shapeSuggestion: shapeSuggestion != null ? shapeSuggestion() : this.shapeSuggestion,
-      detectedMathResult: detectedMathResult != null ? detectedMathResult() : this.detectedMathResult,
-      handwritingMathResult: handwritingMathResult != null ? handwritingMathResult() : this.handwritingMathResult,
+      shapeSuggestion: shapeSuggestion != null
+          ? shapeSuggestion()
+          : this.shapeSuggestion,
+      detectedMathResult: detectedMathResult != null
+          ? detectedMathResult()
+          : this.detectedMathResult,
+      handwritingMathResult: handwritingMathResult != null
+          ? handwritingMathResult()
+          : this.handwritingMathResult,
       toolPresets: toolPresets ?? this.toolPresets,
     );
   }

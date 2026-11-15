@@ -43,11 +43,16 @@ class PageStripWidget extends ConsumerWidget {
             ),
             const SizedBox(width: 8),
             IconButton(
-              icon: const Icon(Icons.delete_outline_rounded,
-                  color: Colors.red, size: 20),
+              icon: const Icon(
+                Icons.delete_outline_rounded,
+                color: Colors.red,
+                size: 20,
+              ),
               tooltip: 'Delete Selected',
               onPressed: () {
-                ref.read(whiteboardControllerProvider.notifier).deleteSelected();
+                ref
+                    .read(whiteboardControllerProvider.notifier)
+                    .deleteSelected();
               },
             ),
             Container(
@@ -111,9 +116,7 @@ class PageStripWidget extends ConsumerWidget {
             tooltip: 'Next $itemNoun',
             onPressed: currentPageIndex < totalPages - 1
                 ? () {
-                    ref
-                        .read(whiteboardControllerProvider.notifier)
-                        .nextPage();
+                    ref.read(whiteboardControllerProvider.notifier).nextPage();
                   }
                 : null,
           ),
@@ -277,13 +280,17 @@ class PageStripWidget extends ConsumerWidget {
                             ),
                             if (pages.length > 1)
                               IconButton(
-                                icon: const Icon(Icons.delete_outline,
-                                    size: 16, color: Colors.red),
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  size: 16,
+                                  color: Colors.red,
+                                ),
                                 tooltip: 'Delete Page',
                                 onPressed: () {
                                   ref
                                       .read(
-                                          whiteboardControllerProvider.notifier)
+                                        whiteboardControllerProvider.notifier,
+                                      )
                                       .deleteCurrentPage();
                                   Navigator.pop(ctx);
                                 },
