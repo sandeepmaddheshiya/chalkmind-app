@@ -18,10 +18,11 @@ class AiMathService {
     required List<Stroke> strokes,
     required AiConfig config,
     AiCancelToken? cancelToken,
+    bool interactive = true,
   }) async {
     if (strokes.isEmpty) return null;
     if (!config.isConfigured) {
-      throw const AiException(AiErrorKind.notConfigured, 'No API key');
+      throw const AiException(AiErrorKind.notConfigured, 'Not signed in');
     }
 
     final base64Image = await renderStrokesToBase64Png(strokes);
@@ -33,6 +34,8 @@ class AiMathService {
       maxTokens: 900,
       timeout: const Duration(seconds: 20),
       cancelToken: cancelToken,
+      action: 'solve',
+      interactive: interactive,
     );
     return parseAiResponse(content, strokes);
   }

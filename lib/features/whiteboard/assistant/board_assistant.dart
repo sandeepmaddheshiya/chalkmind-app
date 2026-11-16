@@ -208,6 +208,7 @@ class BoardAssistant {
       temperature: action == AssistantAction.check ? 0.1 : 0.4,
       maxTokens: action.maxTokens,
       cancelToken: cancelToken,
+      action: 'assistant_${action.name}',
     );
   }
 
@@ -221,6 +222,7 @@ class BoardAssistant {
       temperature: 0.2,
       maxTokens: 1400,
       cancelToken: cancelToken,
+      action: 'assistant_${action.name}',
     );
     try {
       return DiagramSpec.parse(content, action.diagramKind);

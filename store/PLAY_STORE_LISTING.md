@@ -82,3 +82,34 @@ Use real app screens; put a 4–6 word caption on each (captions are what people
 ## Keyword notes
 
 The title and short description carry the primary terms (whiteboard, AI, solve, maths, handwritten, PDF, annotate, explain); Play indexes the full description too, so feature terms are written naturally there (homework, worksheets, flashcards, quiz, mind map, flowchart, graph). Avoid keyword stuffing: Play penalises it. After launch, use Play Console → *Statistics → Store listing acquisition → Search terms* to see the real queries bringing installs, and adjust the short description with store listing experiments.
+
+## App content declarations (Play Console → Policy → App content)
+
+These match what the app and `chalkmind-server` actually do (see https://chalkmind.tech/privacy.html).
+
+**Data safety**
+
+- Data is collected: **Yes**. Shared with third parties: **No**. This holds because the AI provider processes requests on our behalf as a service provider, and Google Play processes payments.
+- Encrypted in transit: **Yes** (HTTPS only).
+- Users can request deletion: **Yes**. In-app: Account → Delete account. Web: `https://chalkmind.tech/privacy.html#delete-account`.
+
+| Data type | Collected | Why | Optional? |
+|---|---|---|---|
+| Personal info → Email address, Name | Yes | Account management | Optional (only for AI features) |
+| Personal info → User IDs (Google account ID) | Yes | Account management | Optional |
+| Photos and videos → Photos (board images / attached photos sent for AI answers) | Yes, processed ephemerally, not stored | App functionality | Optional |
+| App activity → Other user-generated content (AI questions, reported answers, feedback) | Yes | App functionality, Developer communications | Optional |
+| App activity → App interactions (AI request counts per day) | Yes | App functionality (plan limits), Fraud prevention | Optional |
+| Financial info → Purchase history (subscription status from Google Play) | Yes | App functionality | Optional |
+
+No location, contacts, device IDs or advertising IDs are collected. There are no analytics or ads SDKs.
+
+**Other declarations**
+
+- **Ads:** No.
+- **Account deletion URL:** `https://chalkmind.tech/privacy.html#delete-account`.
+- **Login credentials for review:** AI features need Google sign-in. Give reviewers a test Google account, or note that they can sign in with any Google account.
+- **AI-generated content:** Yes. Users can report answers with the flag button (they appear in Admin → Reports).
+- **Target audience:** 13+ (students and teachers). If you target under-13s, the Families policy applies and you must review the AI and sign-in flows against it first.
+
+**Subscription:** product `chalkmind_plus`, with base plans `monthly` and `yearly`. Each has a `trial-7d` free-trial offer for new customers. The step-by-step setup is in `chalkmind-server/README.md`.

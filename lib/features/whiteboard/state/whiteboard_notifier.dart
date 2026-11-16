@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/ai/ai_config.dart';
 import '../../../core/ai/openrouter_client.dart';
+import '../../../core/backend/backend.dart';
 import '../../../core/storage/project_storage_service.dart';
 import '../../../core/storage/recovery_service.dart';
 import '../history/board_command.dart';
@@ -229,8 +230,8 @@ class WhiteboardNotifier extends Notifier<WhiteboardState> {
 
           // STEP 2: If local evaluation didn't resolve (e.g. geometry diagram, triangle with unknown x):
           // Debounce Vision AI by 500ms to avoid flooding upstream workers on every pen touch.
-          // Without an API key, say so once per session (with a Settings
-          // shortcut) instead of failing silently, then stay quiet.
+          // Signed out: say so once per session (with a Sign in shortcut)
+          // instead of failing silently, then stay quiet.
           _visionAiDebounceTimer?.cancel();
           if (!ref.read(aiConfigProvider).isConfigured) {
             if (!_shownMissingKeyHint) {
@@ -238,7 +239,7 @@ class WhiteboardNotifier extends Notifier<WhiteboardState> {
               state = state.copyWith(
                 aiErrorMessage: () =>
                     'This needs the AI solver (geometry, word problems, chemistry...). '
-                    'Add your OpenRouter API key in Settings to turn it on.',
+                    'Sign in with Google to turn it on.',
               );
             }
             return;
@@ -289,6 +290,7 @@ class WhiteboardNotifier extends Notifier<WhiteboardState> {
     }
     final config = ref.read(aiConfigProvider);
     if (!config.isConfigured) {
+      if (userInitiated) AiBackend.requestGate(AiGateReason.signInRequired);
       state = state.copyWith(
         isCalculatingMath: false,
         aiErrorMessage: userInitiated
@@ -312,6 +314,7 @@ class WhiteboardNotifier extends Notifier<WhiteboardState> {
         strokes: strokes,
         config: config,
         cancelToken: token,
+        interactive: userInitiated,
       );
     } on AiException catch (e) {
       if (e.kind != AiErrorKind.cancelled) {

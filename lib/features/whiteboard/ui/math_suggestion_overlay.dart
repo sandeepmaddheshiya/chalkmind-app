@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/ai/ai_config.dart';
+import '../../../core/backend/account.dart';
+import '../../account/account_sheets.dart';
 import '../recognition/math_function_parser.dart';
 import '../state/whiteboard_notifier.dart';
 import 'ai_recognition_settings_dialog.dart';
@@ -94,15 +97,7 @@ class MathSuggestionOverlay extends ConsumerWidget {
                     ),
                   ),
                 ),
-                TextButton(
-                  onPressed: () {
-                    ref
-                        .read(whiteboardControllerProvider.notifier)
-                        .dismissAiError();
-                    AiRecognitionSettingsDialog.show(context);
-                  },
-                  child: const Text('Settings'),
-                ),
+                _AiErrorAction(ref: ref),
                 IconButton(
                   tooltip: 'Dismiss',
                   visualDensity: VisualDensity.compact,
@@ -589,5 +584,48 @@ class MathSuggestionOverlay extends ConsumerWidget {
         );
       },
     );
+  }
+}
+
+/// The pill's action: sign in, upgrade, or (developer key) settings.
+class _AiErrorAction extends StatelessWidget {
+  final WidgetRef ref;
+  const _AiErrorAction({required this.ref});
+
+  @override
+  Widget build(BuildContext context) {
+    final config = ref.watch(aiConfigProvider);
+    final account = ref.watch(accountProvider);
+    final me = account.me;
+    void dismiss() =>
+        ref.read(whiteboardControllerProvider.notifier).dismissAiError();
+    if (config.usesDeveloperKey) {
+      return TextButton(
+        onPressed: () {
+          dismiss();
+          AiRecognitionSettingsDialog.show(context);
+        },
+        child: const Text('Settings'),
+      );
+    }
+    if (me == null) {
+      return TextButton(
+        onPressed: () {
+          dismiss();
+          showSignInSheet(context);
+        },
+        child: const Text('Sign in'),
+      );
+    }
+    if (!me.plan.isPlus && me.quota.limit > 0 && me.quota.remaining == 0) {
+      return TextButton(
+        onPressed: () {
+          dismiss();
+          showPaywall(context, limitReached: true);
+        },
+        child: const Text('Upgrade'),
+      );
+    }
+    return const SizedBox(width: 4);
   }
 }

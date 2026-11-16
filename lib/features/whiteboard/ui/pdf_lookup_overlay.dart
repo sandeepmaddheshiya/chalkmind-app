@@ -7,6 +7,8 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/ai/ai_config.dart';
 import '../../../core/ai/openrouter_client.dart';
+import '../../../core/backend/backend.dart';
+import '../../account/account_sheets.dart';
 import '../assistant/board_assistant.dart';
 import '../models/text_model.dart';
 import '../pdf/pdf_text_index.dart';
@@ -57,6 +59,7 @@ class _PdfLookupOverlayState extends ConsumerState<PdfLookupOverlay> {
       _busy = true;
     });
     if (!config.isConfigured) {
+      AiBackend.requestGate(AiGateReason.signInRequired);
       setState(() {
         _busy = false;
         _error = const AiException(AiErrorKind.notConfigured, '').userMessage;
@@ -253,6 +256,16 @@ class _PdfLookupOverlayState extends ConsumerState<PdfLookupOverlay> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
+                        IconButton(
+                          tooltip: 'Report answer',
+                          icon: const Icon(Icons.flag_outlined, size: 18),
+                          onPressed: () => reportAiAnswer(
+                            context,
+                            action: 'lookup_${_action?.name ?? 'meaning'}',
+                            answer: _answer,
+                            prompt: h.text.isEmpty ? null : h.text,
+                          ),
+                        ),
                         TextButton.icon(
                           icon: const Icon(Icons.copy_rounded, size: 15),
                           label: const Text('Copy'),

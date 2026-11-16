@@ -60,8 +60,9 @@ class AiRecognitionSettingsDialog extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Builds with a built-in key never show key settings to users.
-              if (!AiConfig.hasBuiltInKey) ...[
+              // Developer override only: release builds use the Chalkmind
+              // server and never show key settings.
+              if (AiConfig.allowDeveloperKey) ...[
                 const _AiProviderSection(),
                 const Divider(height: 24),
               ],
@@ -277,11 +278,9 @@ class _AiProviderSectionState extends ConsumerState<_AiProviderSection> {
   @override
   Widget build(BuildContext context) {
     final config = ref.watch(aiConfigProvider);
-    final status = config.isConfigured
-        ? (config.usesBuildTimeKey
-              ? 'Using build-time key'
-              : 'AI is configured')
-        : 'Not configured - AI features are disabled';
+    final status = config.usesDeveloperKey
+        ? 'Direct (developer key)'
+        : 'Using Chalkmind server';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -298,7 +297,7 @@ class _AiProviderSectionState extends ConsumerState<_AiProviderSection> {
             ),
             const SizedBox(width: 8),
             Text(
-              'AI Provider (OpenRouter)',
+              'Developer AI key (debug builds)',
               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
             ),
             const Spacer(),
@@ -349,7 +348,7 @@ class _AiProviderSectionState extends ConsumerState<_AiProviderSection> {
           children: [
             const Expanded(
               child: Text(
-                'Stored only on this device. Board images and text are sent to OpenRouter when you use AI.',
+                'Debug builds only. Leave empty to use the Chalkmind server (sign-in and plan limits apply).',
                 style: TextStyle(fontSize: 11, color: Colors.grey),
               ),
             ),

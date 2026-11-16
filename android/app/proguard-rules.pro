@@ -18,3 +18,9 @@
 -keep class kotlin.Result { *; }
 -keep class kotlin.Result$Failure { *; }
 -keep class kotlin.Unit { *; }
+
+# Google sign-in (google_sign_in 7 uses Android Credential Manager). The
+# Play Services provider is loaded by reflection.
+-if class androidx.credentials.CredentialManager
+-keep class androidx.credentials.playservices.** { *; }
+-keep class com.google.android.libraries.identity.googleid.** { *; }

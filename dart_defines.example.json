@@ -1,3 +1,4 @@
 {
-  "OPENROUTER_API_KEY": "sk-or-v1-your-key-here"
+  "CHALKMIND_API_URL": "https://api.chalkmind.tech",
+  "GOOGLE_SERVER_CLIENT_ID": "1234567890-xxxxxxxx.apps.googleusercontent.com"
 }

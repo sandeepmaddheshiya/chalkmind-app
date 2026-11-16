@@ -62,6 +62,7 @@ class TextLookupService {
       temperature: 0.2,
       maxTokens: action == LookupAction.meaning ? 250 : 450,
       cancelToken: cancelToken,
+      action: 'lookup_${action.name}',
     );
   }
 }

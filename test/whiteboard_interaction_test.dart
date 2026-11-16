@@ -143,7 +143,7 @@ void main() {
     final c = await pumpBoard(tester);
     await key(tester, LogicalKeyboardKey.keyK, ctrl: true); // open assistant
     expect(find.text('AI Assistant'), findsOneWidget);
-    expect(find.textContaining('Add an OpenRouter API key'), findsOneWidget);
+    expect(find.textContaining("Sign in with Google to use AI. It's free."), findsOneWidget);
     await tester.tap(find.byType(TextField).last);
     await tester.pump();
     await tester.sendKeyEvent(LogicalKeyboardKey.keyE);
@@ -152,12 +152,12 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
   });
 
-  testWidgets('assistant without a key explains how to set up instead of failing silently', (tester) async {
+  testWidgets('assistant while signed out asks to sign in instead of failing silently', (tester) async {
     await pumpBoard(tester);
     await key(tester, LogicalKeyboardKey.keyK, ctrl: true);
     await tester.tap(find.widgetWithText(ChoiceChip, 'Explain'));
     await tester.pump();
-    expect(find.textContaining('AI is not set up'), findsOneWidget);
+    expect(find.textContaining('Sign in with Google to use AI features'), findsOneWidget);
     await tester.pump(const Duration(seconds: 1));
   });
 

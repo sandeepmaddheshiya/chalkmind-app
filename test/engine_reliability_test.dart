@@ -214,7 +214,7 @@ void main() {
       expect(s.canUndo, isFalse);
     });
 
-    test('auto-solve without a key says so once instead of failing silently', () {
+    test('auto-solve while signed out says so once instead of failing silently', () {
       final c = ProviderContainer();
       addTearDown(c.dispose);
       final n = c.read(whiteboardControllerProvider.notifier);
@@ -228,7 +228,7 @@ void main() {
       n.addStroke(line('eq2', const Offset(340, 118), const Offset(370, 118)));
       final msg = c.read(whiteboardControllerProvider).aiErrorMessage;
       expect(msg, isNotNull);
-      expect(msg, contains('API key'));
+      expect(msg, contains('Sign in'));
       expect(c.read(whiteboardControllerProvider).isCalculatingMath, isFalse);
       n.dismissAiError();
       n.addStroke(line('eq3', const Offset(340, 130), const Offset(370, 130)));
@@ -261,7 +261,7 @@ void main() {
       expect(pageOf(t.c).texts, isEmpty);
     });
 
-    test('Solve Selected without an API key reports a clear error', () async {
+    test('Solve Selected while signed out reports a clear error', () async {
       final t = setup(strokes: [
         line('a', Offset.zero, const Offset(50, 0)),
         line('b', const Offset(0, 20), const Offset(50, 20)),
@@ -271,7 +271,7 @@ void main() {
       await t.n.solveSelectedStrokes();
       final s = t.c.read(whiteboardControllerProvider);
       expect(s.isCalculatingMath, isFalse);
-      expect(s.aiErrorMessage, contains('API key'));
+      expect(s.aiErrorMessage, contains('Sign in'));
       t.n.dismissAiError();
       expect(t.c.read(whiteboardControllerProvider).aiErrorMessage, isNull);
     });

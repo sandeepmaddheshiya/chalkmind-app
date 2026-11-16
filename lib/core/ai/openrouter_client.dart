@@ -4,9 +4,11 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../backend/backend.dart';
 import 'ai_config.dart';
 
 enum AiErrorKind {
+  /// Not signed in (server mode) or no developer key (developer mode).
   notConfigured,
   unauthorized,
   rateLimited,
@@ -14,6 +16,15 @@ enum AiErrorKind {
   timeout,
   badResponse,
   cancelled,
+
+  /// Today's AI requests for the user's plan are used up.
+  quotaExceeded,
+
+  /// AI paused by the operator, or the provider is down.
+  unavailable,
+
+  /// The account was suspended.
+  accountSuspended,
 }
 
 class AiException implements Exception {
@@ -25,15 +36,19 @@ class AiException implements Exception {
   String get userMessage {
     switch (kind) {
       case AiErrorKind.notConfigured:
-        return 'AI is not set up. Add an OpenRouter API key in Smart Recognition & AI settings.';
+        return 'Sign in with Google to use AI features.';
       case AiErrorKind.unauthorized:
-        return AiConfig.hasBuiltInKey
-            ? 'The AI service is unavailable right now. Please try again later.'
-            : 'The AI provider rejected the API key. Check it in Smart Recognition & AI settings.';
+        return 'The AI provider rejected the developer key. Check it in Smart Recognition & AI settings.';
       case AiErrorKind.rateLimited:
-        return 'The AI provider is rate-limiting requests. Try again in a moment.';
+        return "You're sending AI requests too quickly. Try again in a moment.";
       case AiErrorKind.network:
-        return 'Could not reach the AI provider. Check your internet connection.';
+        return 'Could not reach the AI service. Check your internet connection.';
+      case AiErrorKind.quotaExceeded:
+        return "You've used today's free AI requests. Upgrade to Plus for more.";
+      case AiErrorKind.unavailable:
+        return 'The AI service is unavailable right now. Please try again later.';
+      case AiErrorKind.accountSuspended:
+        return 'This account has been suspended.';
       case AiErrorKind.timeout:
         return 'The AI took too long to respond. Try again.';
       case AiErrorKind.badResponse:
@@ -82,9 +97,16 @@ Map<String, dynamic> aiUserMessage(String text, {String? base64Png}) => {
 };
 
 /// Single shared client for every AI feature (math solver, assistant,
-/// diagram generation). Talks to OpenRouter's OpenAI-compatible API.
+/// diagram generation, PDF look-up).
+///
+/// Release builds talk to the Chalkmind server (`/v1/ai/chat`), which holds
+/// the provider key, chooses the model, applies plan limits and falls back
+/// between models itself. Debug builds with a developer key talk to
+/// OpenRouter directly.
 class OpenRouterClient {
-  static const _endpoint = 'https://openrouter.ai/api/v1/chat/completions';
+  static const _openRouterEndpoint =
+      'https://openrouter.ai/api/v1/chat/completions';
+  static String get _backendEndpoint => '${BackendConfig.baseUrl}/v1/ai/chat';
 
   /// Factory for tests to inject a mock HTTP client.
   @visibleForTesting
@@ -93,18 +115,41 @@ class OpenRouterClient {
   final AiConfig config;
   const OpenRouterClient(this.config);
 
-  Map<String, String> _headers() => {
-    'Authorization': 'Bearer ${config.apiKey}',
-    'Content-Type': 'application/json',
-    // App attribution for OpenRouter (identifies Chalkmind's requests).
-    'HTTP-Referer': 'https://chalkmind.tech',
-    'X-Title': 'Chalkmind',
-  };
+  bool get _direct => config.usesDeveloperKey;
+
+  Future<Map<String, String>> _headers({bool forceRefresh = false}) async {
+    if (_direct) {
+      return {
+        'Authorization': 'Bearer ${config.apiKey}',
+        'Content-Type': 'application/json',
+        // App attribution for OpenRouter (identifies Chalkmind's requests).
+        'HTTP-Referer': 'https://chalkmind.tech',
+        'X-Title': 'Chalkmind',
+      };
+    }
+    final token = forceRefresh
+        ? await AiBackend.refreshAccessToken?.call()
+        : await AiBackend.accessToken?.call();
+    if (token == null) {
+      throw const AiException(AiErrorKind.notConfigured, 'not signed in');
+    }
+    return {
+      'Authorization': 'Bearer $token',
+      'Content-Type': 'application/json',
+    };
+  }
+
+  /// Developer mode tries each model; the server handles fallback itself.
+  List<String?> get _candidates =>
+      _direct ? config.modelCandidates : const <String?>[null];
+
+  Uri get _uri => Uri.parse(_direct ? _openRouterEndpoint : _backendEndpoint);
 
   static bool _isRetryableStatus(int code) =>
       code == 404 || code == 408 || code == 429 || code >= 500;
 
-  static AiException _statusError(int code, String body) {
+  AiException _statusError(int code, String body, {bool interactive = true}) {
+    if (!_direct) return _backendError(code, body, interactive: interactive);
     if (code == 401 || code == 403) {
       return AiException(AiErrorKind.unauthorized, 'HTTP $code');
     }
@@ -113,15 +158,94 @@ class OpenRouterClient {
     return AiException(AiErrorKind.badResponse, 'HTTP $code: $snippet');
   }
 
-  void _ensureConfigured() {
-    if (!config.isConfigured) {
-      throw const AiException(AiErrorKind.notConfigured, 'No API key');
+  /// Maps the server's `{"error":{"code":...}}` answers.
+  static AiException _backendError(
+    int code,
+    String body, {
+    bool interactive = true,
+  }) {
+    Map<String, dynamic> json = const {};
+    try {
+      final d = jsonDecode(body);
+      if (d is Map<String, dynamic>) json = d;
+    } catch (_) {}
+    final err = json['error'];
+    final errCode = err is Map<String, dynamic> ? err['code'] as String? : null;
+    switch (errCode) {
+      case 'quota_exceeded':
+        AiBackend.onQuotaExceeded?.call(json);
+        if (interactive) AiBackend.requestGate(AiGateReason.quotaExceeded);
+        return const AiException(AiErrorKind.quotaExceeded, 'quota');
+      case 'rate_limited':
+        return const AiException(AiErrorKind.rateLimited, 'rate limited');
+      case 'account_banned':
+        if (interactive) AiBackend.requestGate(AiGateReason.accountSuspended);
+        return const AiException(AiErrorKind.accountSuspended, 'banned');
+      case 'ai_disabled':
+      case 'ai_unavailable':
+        return AiException(AiErrorKind.unavailable, errCode!);
+      case 'ai_timeout':
+        return const AiException(AiErrorKind.timeout, 'server timeout');
+    }
+    if (code == 401) {
+      if (interactive) AiBackend.requestGate(AiGateReason.signInRequired);
+      return const AiException(AiErrorKind.notConfigured, 'session expired');
+    }
+    if (code == 429) {
+      return const AiException(AiErrorKind.rateLimited, 'HTTP 429');
+    }
+    if (code >= 500) return AiException(AiErrorKind.unavailable, 'HTTP $code');
+    return AiException(AiErrorKind.badResponse, 'HTTP $code');
+  }
+
+  void _ensureConfigured(bool interactive) {
+    if (_direct) return;
+    if (!AiBackend.isSignedIn) {
+      if (interactive) AiBackend.requestGate(AiGateReason.signInRequired);
+      throw const AiException(AiErrorKind.notConfigured, 'not signed in');
     }
   }
 
-  /// Non-streaming completion. Falls back to the next model only for
-  /// retryable failures (model missing, rate limit, server error, timeout);
-  /// auth failures stop immediately.
+  Map<String, dynamic> _body({
+    required String? model,
+    required List<Map<String, dynamic>> messages,
+    required double temperature,
+    required int? maxTokens,
+    required String action,
+    bool stream = false,
+    Map<String, dynamic>? responseFormat,
+  }) => {
+    'model': ?model,
+    'messages': messages,
+    'temperature': temperature,
+    if (stream) 'stream': true,
+    'max_tokens': ?maxTokens,
+    'response_format': ?responseFormat,
+    if (!_direct) 'action': action,
+  };
+
+  /// Sends one request; in server mode a 401 triggers a token refresh and
+  /// one retry.
+  Future<http.StreamedResponse> _send(
+    http.Client client,
+    Map<String, dynamic> body,
+    Duration timeout,
+  ) async {
+    Future<http.StreamedResponse> once(bool refresh) async {
+      final req = http.Request('POST', _uri)
+        ..headers.addAll(await _headers(forceRefresh: refresh))
+        ..body = jsonEncode(body);
+      return client.send(req).timeout(timeout);
+    }
+
+    final res = await once(false);
+    if (_direct || res.statusCode != 401) return res;
+    await res.stream.drain<void>();
+    return once(true);
+  }
+
+  /// Non-streaming completion. In developer mode, falls back to the next
+  /// model only for retryable failures; auth failures stop immediately.
   Future<String> complete({
     required List<Map<String, dynamic>> messages,
     double temperature = 0.2,
@@ -129,40 +253,54 @@ class OpenRouterClient {
     Duration timeout = const Duration(seconds: 25),
     AiCancelToken? cancelToken,
     Map<String, dynamic>? responseFormat,
+    String action = 'other',
+    bool interactive = true,
   }) async {
-    _ensureConfigured();
+    _ensureConfigured(interactive);
+    // The server may try a second model, so allow it more time.
+    final effectiveTimeout = _direct
+        ? timeout
+        : timeout + const Duration(seconds: 25);
     AiException? lastError;
-    for (final model in config.modelCandidates) {
+    for (final model in _candidates) {
       if (cancelToken?.isCancelled ?? false) {
         throw const AiException(AiErrorKind.cancelled, 'cancelled');
       }
       final client = clientFactory();
       cancelToken?._attach(client);
       try {
-        final response = await client
-            .post(
-              Uri.parse(_endpoint),
-              headers: _headers(),
-              body: jsonEncode({
-                'model': model,
-                'messages': messages,
-                'temperature': temperature,
-                'max_tokens': ?maxTokens,
-                'response_format': ?responseFormat,
-              }),
-            )
-            .timeout(timeout);
+        final response = await http.Response.fromStream(
+          await _send(
+            client,
+            _body(
+              model: model,
+              messages: messages,
+              temperature: temperature,
+              maxTokens: maxTokens,
+              action: action,
+              responseFormat: responseFormat,
+            ),
+            effectiveTimeout,
+          ),
+        ).timeout(effectiveTimeout);
         if (response.statusCode == 200) {
           final content = _extractContent(utf8.decode(response.bodyBytes));
-          if (content != null && content.trim().isNotEmpty) return content;
+          if (content != null && content.trim().isNotEmpty) {
+            if (!_direct) AiBackend.onRequestCompleted?.call();
+            return content;
+          }
           lastError = const AiException(
             AiErrorKind.badResponse,
             'empty content',
           );
           continue;
         }
-        final err = _statusError(response.statusCode, response.body);
-        if (!_isRetryableStatus(response.statusCode)) throw err;
+        final err = _statusError(
+          response.statusCode,
+          utf8.decode(response.bodyBytes),
+          interactive: interactive,
+        );
+        if (!_direct || !_isRetryableStatus(response.statusCode)) throw err;
         lastError = err;
       } on AiException {
         rethrow;
@@ -188,33 +326,45 @@ class OpenRouterClient {
     int? maxTokens,
     Duration firstByteTimeout = const Duration(seconds: 20),
     AiCancelToken? cancelToken,
+    String action = 'other',
+    bool interactive = true,
   }) async* {
-    _ensureConfigured();
+    _ensureConfigured(interactive);
+    final effectiveTimeout = _direct
+        ? firstByteTimeout
+        : firstByteTimeout + const Duration(seconds: 25);
     AiException? lastError;
-    for (final model in config.modelCandidates) {
+    for (final model in _candidates) {
       if (cancelToken?.isCancelled ?? false) return;
       final client = clientFactory();
       cancelToken?._attach(client);
       bool yieldedAny = false;
       try {
-        final request = http.Request('POST', Uri.parse(_endpoint))
-          ..headers.addAll(_headers())
-          ..body = jsonEncode({
-            'model': model,
-            'messages': messages,
-            'temperature': temperature,
-            'stream': true,
-            'max_tokens': ?maxTokens,
-          });
-        final response = await client.send(request).timeout(firstByteTimeout);
+        final response = await _send(
+          client,
+          _body(
+            model: model,
+            messages: messages,
+            temperature: temperature,
+            maxTokens: maxTokens,
+            action: action,
+            stream: true,
+          ),
+          effectiveTimeout,
+        );
         if (response.statusCode != 200) {
           final body = await response.stream.bytesToString();
-          final err = _statusError(response.statusCode, body);
-          if (!_isRetryableStatus(response.statusCode)) throw err;
+          final err = _statusError(
+            response.statusCode,
+            body,
+            interactive: interactive,
+          );
+          if (!_direct || !_isRetryableStatus(response.statusCode)) throw err;
           lastError = err;
           continue;
         }
         await for (final delta in parseSseDeltas(response.stream)) {
+          if (!yieldedAny && !_direct) AiBackend.onRequestCompleted?.call();
           yieldedAny = true;
           yield delta;
         }

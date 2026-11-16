@@ -228,10 +228,10 @@ void main() {
       expect(find.textContaining('cell'), findsOneWidget);
       expect(find.text('Meaning'), findsOneWidget);
       expect(find.text('Explain'), findsOneWidget);
-      // Without a key in tests, tapping explains the problem instead of failing silently.
+      // Signed out in tests: tapping asks the user to sign in instead of failing silently.
       await tester.tap(find.text('Meaning'));
       await tester.pump();
-      expect(find.textContaining('AI is not set up'), findsOneWidget);
+      expect(find.textContaining('Sign in with Google'), findsOneWidget);
       await tester.tap(find.byTooltip('Close'));
       await tester.pump();
       expect(find.text('Meaning'), findsNothing);

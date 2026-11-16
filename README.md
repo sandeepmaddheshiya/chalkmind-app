@@ -11,12 +11,23 @@ Website: https://chalkmind.tech (the landing site lives in its own repository, `
 
 ## Run
 
-AI needs an OpenRouter API key, kept out of git:
+AI, sign-in and subscriptions go through the Chalkmind server (`chalkmind-server` repository,
+`https://api.chalkmind.tech`). The app contains no API keys. Build settings live in a
+git-ignored file:
 
 ```sh
-cp dart_defines.example.json dart_defines.json   # then put your key in it
+cp dart_defines.example.json dart_defines.json
+# GOOGLE_SERVER_CLIENT_ID = the *Web* OAuth client ID from Google Cloud (see chalkmind-server/README.md)
 flutter run --dart-define-from-file=dart_defines.json
 ```
+
+- Without sign-in, drawing, shapes, offline maths, PDF import and export all work. AI features
+  ask the user to sign in with Google.
+- Free accounts get a daily number of AI answers. **Chalkmind Plus** (Google Play subscription
+  `chalkmind_plus`, monthly/yearly with a free trial) raises the limit. The server verifies every
+  purchase.
+- Debug builds can bypass the server with a developer OpenRouter key in Smart Recognition & AI
+  settings. Release builds never show or use one.
 
 Release build for a phone/tablet (arm64):
 

@@ -2,37 +2,45 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// User-configurable AI provider settings.
+import '../backend/backend.dart';
+
+/// AI provider settings.
 ///
-/// The API key is never stored in source code. It is resolved from:
-///  1. a key built into the app at compile time from the git-ignored
-///     `dart_defines.json` (`--dart-define-from-file=dart_defines.json`).
-///     When present, users never see or enter a key; or
-///  2. (only when no key is built in) a key entered in Smart Recognition &
-///     AI settings, for development builds.
-/// If neither is present, AI features say so instead of silently failing.
+/// Release builds send every AI request through the Chalkmind server
+/// (`api.chalkmind.tech`), which holds the provider key, picks the model
+/// and enforces the daily limits for the user's plan. The app contains no
+/// API key.
+///
+/// Debug builds can instead call OpenRouter directly with a developer key
+/// entered in Smart Recognition & AI settings (useful without a server).
 @immutable
 class AiConfig {
   static const String defaultModel = 'google/gemini-2.5-flash';
   static const String defaultFallbackModel = 'google/gemini-2.5-flash-lite';
-  static const String _buildTimeKey = String.fromEnvironment(
-    'OPENROUTER_API_KEY',
-  );
+
+  /// Developer override is never available in release builds.
+  static const bool allowDeveloperKey = !kReleaseMode;
 
   final String userApiKey;
   final String model;
 
   const AiConfig({this.userApiKey = '', this.model = defaultModel});
 
-  /// True when this build has a key compiled in: the app then hides all key
-  /// settings and messages from users.
-  static bool get hasBuiltInKey => _buildTimeKey.isNotEmpty;
+  /// True when requests go to OpenRouter directly with a developer key.
+  bool get usesDeveloperKey =>
+      allowDeveloperKey && userApiKey.trim().isNotEmpty;
 
-  String get apiKey => hasBuiltInKey ? _buildTimeKey : userApiKey.trim();
-  bool get isConfigured => apiKey.isNotEmpty;
-  bool get usesBuildTimeKey => hasBuiltInKey;
+  /// True when requests go through the Chalkmind server.
+  bool get usesBackend => !usesDeveloperKey;
 
-  /// Primary model first, then a cheaper fallback (deduplicated).
+  String get apiKey => usesDeveloperKey ? userApiKey.trim() : '';
+
+  /// Whether a request can be attempted now: a developer key, or a
+  /// signed-in account.
+  bool get isConfigured => usesDeveloperKey || AiBackend.isSignedIn;
+
+  /// Developer mode: primary model first, then a cheaper fallback. The
+  /// server chooses models itself in backend mode.
   List<String> get modelCandidates {
     final primary = model.trim().isEmpty ? defaultModel : model.trim();
     return {primary, defaultFallbackModel}.toList();
@@ -58,9 +66,15 @@ class AiConfigNotifier extends Notifier<AiConfig> {
     try {
       final prefs = await SharedPreferences.getInstance();
       state = AiConfig(
-        userApiKey: prefs.getString(_keyPref) ?? '',
+        userApiKey: AiConfig.allowDeveloperKey
+            ? prefs.getString(_keyPref) ?? ''
+            : '',
         model: prefs.getString(_modelPref) ?? AiConfig.defaultModel,
       );
+      if (!AiConfig.allowDeveloperKey && prefs.containsKey(_keyPref)) {
+        // Remove keys saved by older builds.
+        await prefs.remove(_keyPref);
+      }
     } catch (e) {
       debugPrint('AiConfig: could not load preferences: $e');
     }

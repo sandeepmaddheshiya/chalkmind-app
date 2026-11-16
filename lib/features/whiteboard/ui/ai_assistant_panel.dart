@@ -8,12 +8,15 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/ai/ai_config.dart';
 import '../../../core/ai/openrouter_client.dart';
+import '../../../core/backend/backend.dart';
+import '../../../core/backend/account.dart';
+import '../../account/account_sheets.dart';
+import '../../account/account_style.dart';
 import '../assistant/board_assistant.dart';
 import '../assistant/board_context.dart';
 import '../assistant/diagram_builder.dart';
 import '../models/text_model.dart';
 import '../state/whiteboard_notifier.dart';
-import 'ai_recognition_settings_dialog.dart';
 
 class _Message {
   final bool isUser;
@@ -170,6 +173,7 @@ class _AiAssistantPanelState extends ConsumerState<AiAssistantPanel> {
     _scrollToEnd();
 
     if (!config.isConfigured) {
+      AiBackend.requestGate(AiGateReason.signInRequired);
       setState(() {
         reply.streaming = false;
         reply.error = const AiException(
@@ -367,33 +371,7 @@ class _AiAssistantPanelState extends ConsumerState<AiAssistantPanel> {
             ),
           ),
 
-          if (!config.isConfigured)
-            Container(
-              width: double.infinity,
-              margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.key_rounded, size: 18, color: Colors.orange),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text(
-                      'Add an OpenRouter API key to use AI features.',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () => AiRecognitionSettingsDialog.show(context),
-                    child: const Text('Set up'),
-                  ),
-                ],
-              ),
-            ),
+          _AccountBanner(config: config),
 
           // Actions
           Padding(
@@ -629,30 +607,146 @@ class _AiAssistantPanelState extends ConsumerState<AiAssistantPanel> {
                 ],
               ),
             ),
-          if (!m.streaming && m.text.isNotEmpty && !m.action.isDiagram)
+          if (!m.streaming && m.text.isNotEmpty)
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton.icon(
-                  icon: const Icon(Icons.copy_rounded, size: 14),
-                  label: const Text('Copy', style: TextStyle(fontSize: 11.5)),
-                  onPressed: () {
-                    Clipboard.setData(
-                      ClipboardData(text: BoardAssistant.toBoardText(m.text)),
-                    );
-                    _snack('Copied');
-                  },
-                ),
-                TextButton.icon(
-                  icon: const Icon(Icons.add_box_outlined, size: 14),
-                  label: const Text(
-                    'Insert on board',
-                    style: TextStyle(fontSize: 11.5),
+                IconButton(
+                  tooltip: 'Report answer',
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(
+                    Icons.flag_outlined,
+                    size: 16,
+                    color: theme.hintColor,
                   ),
-                  onPressed: () => _insertOnBoard(m),
+                  onPressed: () => _report(m),
                 ),
+                if (!m.action.isDiagram) ...[
+                  TextButton.icon(
+                    icon: const Icon(Icons.copy_rounded, size: 14),
+                    label: const Text('Copy', style: TextStyle(fontSize: 11.5)),
+                    onPressed: () {
+                      Clipboard.setData(
+                        ClipboardData(text: BoardAssistant.toBoardText(m.text)),
+                      );
+                      _snack('Copied');
+                    },
+                  ),
+                  TextButton.icon(
+                    icon: const Icon(Icons.add_box_outlined, size: 14),
+                    label: const Text(
+                      'Insert on board',
+                      style: TextStyle(fontSize: 11.5),
+                    ),
+                    onPressed: () => _insertOnBoard(m),
+                  ),
+                ],
               ],
             ),
+        ],
+      ),
+    );
+  }
+
+  void _report(_Message m) {
+    final i = _messages.indexOf(m);
+    final prompt = i > 0 && _messages[i - 1].isUser
+        ? _messages[i - 1].text
+        : null;
+    reportAiAnswer(
+      context,
+      action: 'assistant_${m.action.name}',
+      answer: m.text,
+      prompt: prompt,
+    );
+  }
+}
+
+/// Sign-in prompt (signed out) or remaining free answers (signed in).
+class _AccountBanner extends ConsumerWidget {
+  final AiConfig config;
+  const _AccountBanner({required this.config});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final account = ref.watch(accountProvider);
+    if (config.usesDeveloperKey) return const SizedBox.shrink();
+    final me = account.me;
+    if (me == null) {
+      return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+        padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+        decoration: BoxDecoration(
+          gradient: AccountColors.headerGradient,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.auto_awesome_rounded,
+              size: 18,
+              color: AccountColors.yellow,
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'Sign in with Google to use AI. It\'s free.',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  color: AccountColors.chalk,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: AccountColors.yellow,
+                foregroundColor: AccountColors.onYellow,
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+              ),
+              onPressed: () => showSignInSheet(context),
+              child: const Text(
+                'Sign in',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    if (me.plan.isPlus || me.quota.limit == 0) return const SizedBox.shrink();
+    final left = me.quota.remaining;
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+      child: Row(
+        children: [
+          Icon(
+            Icons.bolt_rounded,
+            size: 16,
+            color: left == 0
+                ? theme.colorScheme.error
+                : theme.colorScheme.primary,
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              left == 0
+                  ? "No free AI answers left today"
+                  : '$left free AI answer${left == 1 ? '' : 's'} left today',
+              style: TextStyle(
+                fontSize: 12,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+            onPressed: () => showPaywall(context, limitReached: left == 0),
+            child: const Text('Get Plus'),
+          ),
         ],
       ),
     );

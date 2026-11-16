@@ -5,6 +5,7 @@ import '../whiteboard/models/background_style.dart';
 import '../whiteboard/models/page_model.dart';
 import '../whiteboard/models/project_model.dart';
 import '../whiteboard/state/whiteboard_notifier.dart';
+import '../account/account_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../whiteboard/pdf/pdf_import_flow.dart';
 import '../whiteboard/ui/whiteboard_screen.dart';
@@ -254,12 +255,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, size: 20),
-            tooltip: 'Refresh',
-            onPressed: _loadData,
-          ),
-          const SizedBox(width: 12),
+          const AccountButton(),
+          const SizedBox(width: 8),
         ],
       ),
       body: RefreshIndicator(
