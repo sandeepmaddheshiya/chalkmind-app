@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -86,6 +87,116 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
   // Trackpad pan/zoom
   double _lastTrackpadScale = 1.0;
 
+  // --- Page viewport ---------------------------------------------------
+  //
+  // In page mode the sheet is fitted to the screen width, can't be dragged
+  // off-screen, and only accepts ink on the sheet itself.
+
+  static const Rect _sheet = BackgroundPainter.defaultPageRect;
+  static const double _sideMargin = 10;
+  static const double _topMargin = 10;
+  // Room under the page so its bottom edge can scroll above the bottom bar.
+  static const double _bottomMargin = 96;
+
+  Size? _viewport;
+  bool _pendingFit = true;
+
+  bool get _isPaged => !ref.read(whiteboardControllerProvider).isInfiniteCanvas;
+
+  double _fitWidthScale(Size v) =>
+      ((v.width - 2 * _sideMargin) / _sheet.width).clamp(0.05, 8.0);
+
+  double _fitPageScale(Size v) => math
+      .min(
+        _fitWidthScale(v),
+        (v.height - _topMargin - _bottomMargin) / _sheet.height,
+      )
+      .clamp(0.05, 8.0);
+
+  ({double min, double max}) _scaleLimits(bool isInfinite) {
+    final v = _viewport;
+    if (isInfinite) return (min: 0.10, max: 6.0);
+    if (v == null) return (min: 0.40, max: 3.5);
+    final fit = _fitWidthScale(v);
+    return (min: math.min(fit, _fitPageScale(v)) * 0.9, max: fit * 5);
+  }
+
+  /// Keeps the sheet on screen: centred when it's smaller than the view,
+  /// otherwise its edges can't be pulled inside the margins.
+  Matrix4 _clamped(Matrix4 m) {
+    final v = _viewport;
+    if (v == null || !_isPaged) return m;
+    final s = _scaleOf(m);
+
+    double axis(
+      double pos,
+      double len,
+      double view,
+      double lead,
+      double trail,
+    ) {
+      final avail = view - lead - trail;
+      if (len <= avail) return lead + (avail - len) / 2;
+      return pos.clamp(view - trail - len, lead).toDouble();
+    }
+
+    final left = axis(
+      m.entry(0, 3) + _sheet.left * s,
+      _sheet.width * s,
+      v.width,
+      _sideMargin,
+      _sideMargin,
+    );
+    final top = axis(
+      m.entry(1, 3) + _sheet.top * s,
+      _sheet.height * s,
+      v.height,
+      _topMargin,
+      _bottomMargin,
+    );
+    return m.clone()
+      ..setEntry(0, 3, left - _sheet.left * s)
+      ..setEntry(1, 3, top - _sheet.top * s);
+  }
+
+  /// Uniform 2D zoom of [m]. (Matrix4.getMaxScaleOnAxis would include the
+  /// untouched z axis and never report less than 1.)
+  static double _scaleOf(Matrix4 m) => m.entry(0, 0).abs();
+
+  void _setTransform(Matrix4 m) => _transformController.value = _clamped(m);
+
+  /// Page mode's "100%": the sheet fills the width, top edge in view.
+  void _fitWidth() {
+    final v = _viewport;
+    if (v == null) return;
+    final s = _fitWidthScale(v);
+    _setTransform(
+      Matrix4.identity()
+        ..setEntry(0, 0, s)
+        ..setEntry(1, 1, s)
+        ..setEntry(0, 3, (v.width - _sheet.width * s) / 2 - _sheet.left * s)
+        ..setEntry(1, 3, _topMargin - _sheet.top * s),
+    );
+  }
+
+  void _onViewportChanged(Size size) {
+    final old = _viewport;
+    if (old == size) return;
+    _viewport = size;
+    // Re-fit on first layout and rotation; ignore height-only changes such
+    // as the keyboard opening.
+    if (old == null || old.width != size.width) _pendingFit = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_pendingFit) {
+        _pendingFit = false;
+        _resetTransform();
+      }
+    });
+  }
+
+  bool _offSheet(Offset scenePoint) => _isPaged && !_sheet.contains(scenePoint);
+
   @override
   void initState() {
     super.initState();
@@ -93,7 +204,8 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
   }
 
   void _onTransformChanged() {
-    final scale = _transformController.value.getMaxScaleOnAxis();
+    final scale = _scaleOf(_transformController.value);
+    final v = _viewport;
     ref
         .read(whiteboardControllerProvider.notifier)
         .setZoomAndPan(
@@ -102,6 +214,7 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
             _transformController.value.entry(0, 3),
             _transformController.value.entry(1, 3),
           ),
+          base: _isPaged && v != null ? _fitWidthScale(v) : 1.0,
         );
   }
 
@@ -111,7 +224,7 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
     final currentTy = matrix.entry(1, 3);
     matrix.setEntry(0, 3, currentTx + screenDelta.dx);
     matrix.setEntry(1, 3, currentTy + screenDelta.dy);
-    _transformController.value = matrix;
+    _setTransform(matrix);
   }
 
   void _zoomAround(
@@ -120,10 +233,9 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
     required bool isInfinite,
   }) {
     final matrix = _transformController.value.clone();
-    final currentScale = matrix.getMaxScaleOnAxis();
-    final minScale = isInfinite ? 0.10 : 0.40;
-    final maxScale = isInfinite ? 6.0 : 3.5;
-    final targetScale = (currentScale * factor).clamp(minScale, maxScale);
+    final currentScale = _scaleOf(matrix);
+    final limits = _scaleLimits(isInfinite);
+    final targetScale = (currentScale * factor).clamp(limits.min, limits.max);
     final actualRatio = targetScale / currentScale;
 
     final currentTx = matrix.entry(0, 3);
@@ -135,7 +247,7 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
     matrix.scaleByDouble(actualRatio, actualRatio, 1.0, 1.0);
     matrix.setEntry(0, 3, newTx);
     matrix.setEntry(1, 3, newTy);
-    _transformController.value = matrix;
+    _setTransform(matrix);
   }
 
   void _zoomBy(double factor) {
@@ -148,7 +260,11 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
   }
 
   void _resetTransform() {
-    _transformController.value = Matrix4.identity();
+    if (_isPaged && _viewport != null) {
+      _fitWidth();
+    } else {
+      _transformController.value = Matrix4.identity();
+    }
   }
 
   /// Zooms and pans so all content on the page is visible.
@@ -163,19 +279,22 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
     final viewport = renderBox.size;
     final padded = bounds.inflate(48);
     final isInfinite = ref.read(whiteboardControllerProvider).isInfiniteCanvas;
+    final limits = _scaleLimits(isInfinite);
     final scale = (viewport.width / padded.width)
         .clamp(0.0, viewport.height / padded.height)
-        .clamp(isInfinite ? 0.10 : 0.40, 2.0)
+        .clamp(limits.min, math.min(limits.max, isInfinite ? 2.0 : limits.max))
         .toDouble();
     final tx =
         (viewport.width - padded.width * scale) / 2 - padded.left * scale;
     final ty =
         (viewport.height - padded.height * scale) / 2 - padded.top * scale;
-    _transformController.value = Matrix4.identity()
-      ..setEntry(0, 0, scale)
-      ..setEntry(1, 1, scale)
-      ..setEntry(0, 3, tx)
-      ..setEntry(1, 3, ty);
+    _setTransform(
+      Matrix4.identity()
+        ..setEntry(0, 0, scale)
+        ..setEntry(1, 1, scale)
+        ..setEntry(0, 3, tx)
+        ..setEntry(1, 3, ty),
+    );
   }
 
   static Rect? _contentBounds(PageModel page) {
@@ -202,7 +321,8 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
     final i = project.currentPageIndex;
     return [
       for (final j in [i + 1, i - 1, i + 2])
-        if (j >= 0 && j < project.pages.length && project.pages[j].pdf != null) project.pages[j].pdf!,
+        if (j >= 0 && j < project.pages.length && project.pages[j].pdf != null)
+          project.pages[j].pdf!,
     ];
   }
 
@@ -260,6 +380,17 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
     final currentPage = view.page;
     final isInfinite = view.infinite;
 
+    // Switching between page and infinite canvas resets the view.
+    ref.listen<bool>(
+      whiteboardControllerProvider.select((s) => s.isInfiniteCanvas),
+      (prev, next) {
+        if (prev == next) return;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _resetTransform();
+        });
+      },
+    );
+
     // Listen for zoom actions from floating zoom toolbar
     ref.listen<CanvasZoomAction>(canvasZoomActionProvider, (prev, next) {
       if (next == CanvasZoomAction.none) return;
@@ -310,6 +441,37 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
     final tool = view.tool;
     final hiddenIds = _isMovingSelected ? selectedIds : const <String>{};
 
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        _onViewportChanged(constraints.biggest);
+        return _buildLayers(
+          currentPage: currentPage,
+          isInfinite: isInfinite,
+          selectedBounds: selectedBounds,
+          selectedIds: selectedIds,
+          hiddenIds: hiddenIds,
+          tool: tool,
+          color: view.color,
+          width: view.width,
+          shapeType: view.shapeType,
+          filled: view.filled,
+        );
+      },
+    );
+  }
+
+  Widget _buildLayers({
+    required PageModel currentPage,
+    required bool isInfinite,
+    required Rect? selectedBounds,
+    required Set<String> selectedIds,
+    required Set<String> hiddenIds,
+    required ToolType tool,
+    required int color,
+    required double width,
+    required ShapeType shapeType,
+    required bool filled,
+  }) {
     return Stack(
       children: [
         // Layer 0: Background surface (Infinite Canvas or Paginated Desk + Sheet)
@@ -347,96 +509,101 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
               child: AnimatedBuilder(
                 animation: _transformController,
                 child: SizedBox.expand(
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      // Imported PDF page: the "paper" under all ink.
-                      if (currentPage.pdf != null)
-                        _PdfPageImage(
-                          key: ValueKey(currentPage.pdf!.imagePath),
-                          pdf: currentPage.pdf!,
-                          neighbours: _neighbourPdfPages(),
-                        ),
+                  child: ClipRect(
+                    clipper: isInfinite ? null : const _SheetClipper(_sheet),
+                    clipBehavior: isInfinite ? Clip.none : Clip.hardEdge,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        // Imported PDF page: the "paper" under all ink.
+                        if (currentPage.pdf != null)
+                          _PdfPageImage(
+                            key: ValueKey(currentPage.pdf!.imagePath),
+                            pdf: currentPage.pdf!,
+                            neighbours: _neighbourPdfPages(),
+                          ),
 
-                      // Committed board content
-                      Positioned.fill(
-                        child: IgnorePointer(
-                          child: RepaintBoundary(
-                            child: CustomPaint(
-                              painter: BoardPainter(
-                                strokes: currentPage.strokes,
-                                shapes: currentPage.shapes,
-                                texts: currentPage.texts,
-                                hiddenIds: hiddenIds,
+                        // Committed board content
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: RepaintBoundary(
+                              child: CustomPaint(
+                                painter: BoardPainter(
+                                  strokes: currentPage.strokes,
+                                  shapes: currentPage.shapes,
+                                  texts: currentPage.texts,
+                                  hiddenIds: hiddenIds,
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
 
-                      // Interactive math function plots
-                      for (final plot in currentPage.plots)
-                        if (_isMovingSelected && selectedIds.contains(plot.id))
-                          AnimatedBuilder(
-                            key: ValueKey(plot.id),
-                            animation: _gesture,
-                            builder: (context, _) => InteractivePlotWidget(
+                        // Interactive math function plots
+                        for (final plot in currentPage.plots)
+                          if (_isMovingSelected &&
+                              selectedIds.contains(plot.id))
+                            AnimatedBuilder(
+                              key: ValueKey(plot.id),
+                              animation: _gesture,
+                              builder: (context, _) => InteractivePlotWidget(
+                                plot: plot,
+                                isDarkCanvas: currentPage.background.isDark,
+                                previewOffset: _gesture.dragOffset,
+                              ),
+                            )
+                          else
+                            InteractivePlotWidget(
+                              key: ValueKey(plot.id),
                               plot: plot,
                               isDarkCanvas: currentPage.background.isDark,
-                              previewOffset: _gesture.dragOffset,
                             ),
-                          )
-                        else
-                          InteractivePlotWidget(
-                            key: ValueKey(plot.id),
-                            plot: plot,
-                            isDarkCanvas: currentPage.background.isDark,
+
+                        // Dragged selection preview
+                        if (_isMovingSelected)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: CustomPaint(
+                                painter: _DragPreviewPainter(
+                                  gesture: _gesture,
+                                  page: currentPage,
+                                  ids: selectedIds,
+                                ),
+                              ),
+                            ),
                           ),
 
-                      // Dragged selection preview
-                      if (_isMovingSelected)
+                        // Selection bounding box & marquee
+                        if (tool == ToolType.select)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: CustomPaint(
+                                painter: _LiveSelectionPainter(
+                                  gesture: _gesture,
+                                  bounds: selectedBounds,
+                                  isDragging: _isMovingSelected,
+                                ),
+                              ),
+                            ),
+                          ),
+
+                        // Active stroke / gesture in progress
                         Positioned.fill(
                           child: IgnorePointer(
                             child: CustomPaint(
-                              painter: _DragPreviewPainter(
+                              painter: _LiveGesturePainter(
                                 gesture: _gesture,
-                                page: currentPage,
-                                ids: selectedIds,
+                                tool: tool,
+                                color: Color(color),
+                                width: width,
+                                shapeType: shapeType,
+                                filled: filled,
                               ),
                             ),
                           ),
                         ),
-
-                      // Selection bounding box & marquee
-                      if (tool == ToolType.select)
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            child: CustomPaint(
-                              painter: _LiveSelectionPainter(
-                                gesture: _gesture,
-                                bounds: selectedBounds,
-                                isDragging: _isMovingSelected,
-                              ),
-                            ),
-                          ),
-                        ),
-
-                      // Active stroke / gesture in progress
-                      Positioned.fill(
-                        child: IgnorePointer(
-                          child: CustomPaint(
-                            painter: _LiveGesturePainter(
-                              gesture: _gesture,
-                              tool: tool,
-                              color: Color(view.color),
-                              width: view.width,
-                              shapeType: view.shapeType,
-                              filled: view.filled,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
                 builder: (context, child) => Transform(
@@ -650,6 +817,11 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
     final notifier = ref.read(whiteboardControllerProvider.notifier);
     final tool = state.currentTool;
 
+    // On a page, ink, shapes and text start only on the sheet.
+    if ((tool.isDrawingTool || tool == ToolType.shape) && _offSheet(point)) {
+      return;
+    }
+
     if (tool.isDrawingTool) {
       _gesture.points
         ..clear()
@@ -703,7 +875,8 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
       if (_gesture.points.isEmpty) return;
       final last = _gesture.points.last;
       // Skip sub-pixel jitter: keeps stroke data lean without visible loss.
-      if ((last.x - point.dx).abs() < 0.35 && (last.y - point.dy).abs() < 0.35) {
+      if ((last.x - point.dx).abs() < 0.35 &&
+          (last.y - point.dy).abs() < 0.35) {
         return;
       }
       _gesture.points.add(_point(point, event));
@@ -715,6 +888,7 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
       _gesture.eraser = point;
       _gesture.changed();
     } else if (tool == ToolType.shape) {
+      if (_gesture.shapeStart == null) return;
       _gesture.shapeEnd = point;
       _gesture.changed();
     } else if (tool == ToolType.laser) {
@@ -786,6 +960,7 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
       _gesture.shapeEnd = null;
       _gesture.changed();
     } else if (tool == ToolType.text) {
+      if (_offSheet(point)) return;
       final existing = _findTextAt(point);
       _showTextDialog(position: point, existing: existing);
     } else if (tool == ToolType.laser) {
@@ -981,7 +1156,11 @@ class _TextEditDialogState extends State<_TextEditDialog> {
 class _PdfPageImage extends StatefulWidget {
   final PdfPageAttachment pdf;
   final List<PdfPageAttachment> neighbours;
-  const _PdfPageImage({super.key, required this.pdf, this.neighbours = const []});
+  const _PdfPageImage({
+    super.key,
+    required this.pdf,
+    this.neighbours = const [],
+  });
 
   @override
   State<_PdfPageImage> createState() => _PdfPageImageState();
@@ -1026,10 +1205,13 @@ class _PdfPageImageState extends State<_PdfPageImage> {
   Widget build(BuildContext context) {
     final pdf = widget.pdf;
     Widget message(String text) => Container(
-          color: Colors.white,
-          alignment: Alignment.center,
-          child: Text(text, style: const TextStyle(color: Color(0xFF6B7280), fontSize: 18)),
-        );
+      color: Colors.white,
+      alignment: Alignment.center,
+      child: Text(
+        text,
+        style: const TextStyle(color: Color(0xFF6B7280), fontSize: 18),
+      ),
+    );
     final Widget child;
     if (_path != null) {
       child = Image.file(
@@ -1037,7 +1219,8 @@ class _PdfPageImageState extends State<_PdfPageImage> {
         fit: BoxFit.fill,
         filterQuality: FilterQuality.medium,
         gaplessPlayback: true,
-        errorBuilder: (_, _, _) => message('PDF page ${pdf.pageIndex + 1} could not be loaded'),
+        errorBuilder: (_, _, _) =>
+            message('PDF page ${pdf.pageIndex + 1} could not be loaded'),
       );
     } else if (_failed) {
       child = message('PDF page ${pdf.pageIndex + 1} could not be loaded');
@@ -1046,7 +1229,11 @@ class _PdfPageImageState extends State<_PdfPageImage> {
         color: Colors.white,
         alignment: Alignment.topCenter,
         padding: const EdgeInsets.only(top: 40),
-        child: const SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 2.5)),
+        child: const SizedBox(
+          width: 28,
+          height: 28,
+          child: CircularProgressIndicator(strokeWidth: 2.5),
+        ),
       );
     }
     return Positioned.fromRect(
@@ -1054,7 +1241,13 @@ class _PdfPageImageState extends State<_PdfPageImage> {
       child: IgnorePointer(
         child: DecoratedBox(
           decoration: const BoxDecoration(
-            boxShadow: [BoxShadow(color: Color(0x22000000), blurRadius: 6, offset: Offset(0, 2))],
+            boxShadow: [
+              BoxShadow(
+                color: Color(0x22000000),
+                blurRadius: 6,
+                offset: Offset(0, 2),
+              ),
+            ],
           ),
           child: child,
         ),
@@ -1169,4 +1362,16 @@ class _DragPreviewPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _DragPreviewPainter old) => true;
+}
+
+/// Clips board content to the page sheet (scene coordinates).
+class _SheetClipper extends CustomClipper<Rect> {
+  final Rect sheet;
+  const _SheetClipper(this.sheet);
+
+  @override
+  Rect getClip(Size size) => sheet;
+
+  @override
+  bool shouldReclip(_SheetClipper oldClipper) => oldClipper.sheet != sheet;
 }

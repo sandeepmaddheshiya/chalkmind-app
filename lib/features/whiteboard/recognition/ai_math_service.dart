@@ -19,17 +19,29 @@ class AiMathService {
     required AiConfig config,
     AiCancelToken? cancelToken,
     bool interactive = true,
+    AnswerPlacement? placement,
+    Set<String> targetIds = const {},
   }) async {
+    final override = debugOverride;
+    if (override != null) return override(strokes, placement);
     if (strokes.isEmpty) return null;
     if (!config.isConfigured) {
       throw const AiException(AiErrorKind.notConfigured, 'Not signed in');
     }
 
-    final base64Image = await renderStrokesToBase64Png(strokes);
+    final base64Image = await renderStrokesToBase64Png(
+      strokes,
+      highlightIds: targetIds,
+    );
     if (base64Image == null) return null;
 
     final content = await OpenRouterClient(config).complete(
-      messages: [aiUserMessage(_promptText, base64Png: base64Image)],
+      messages: [
+        aiUserMessage(
+          targetIds.isEmpty ? _promptText : '$_promptText\n$_targetNote',
+          base64Png: base64Image,
+        ),
+      ],
       temperature: 0.1,
       maxTokens: 900,
       timeout: const Duration(seconds: 20),
@@ -37,8 +49,20 @@ class AiMathService {
       action: 'solve',
       interactive: interactive,
     );
-    return parseAiResponse(content, strokes);
+    return parseAiResponse(content, strokes, placement: placement);
   }
+
+  /// Replaces the AI call in tests.
+  @visibleForTesting
+  static Future<HandwritingMathResult?> Function(
+    List<Stroke> strokes,
+    AnswerPlacement? placement,
+  )? debugOverride;
+
+  static const String _targetNote =
+      'The "=" drawn in RED marks the question to answer now: solve the '
+      'expression that ends at the red "=". Everything else is context '
+      '(earlier lines, given values, diagrams).';
 
   static const String _promptText =
       'You are an expert STEM tutor solving a problem handwritten on a classroom whiteboard. '
@@ -71,8 +95,9 @@ class AiMathService {
   @visibleForTesting
   static HandwritingMathResult? parseAiResponse(
     String content,
-    List<Stroke> strokes,
-  ) {
+    List<Stroke> strokes, {
+    AnswerPlacement? placement,
+  }) {
     try {
       String expression = '';
       String answer = '';
@@ -159,7 +184,8 @@ class AiMathService {
         return null;
       }
 
-      // Calculate placement: placed directly after '=' along teacher's baseline slant
+      // Placement: given by the '=' that started the request, else after
+      // the last '=' found in the strokes, else right of the writing.
       Rect? unionBounds;
       for (final s in strokes) {
         unionBounds = unionBounds == null
@@ -169,21 +195,27 @@ class AiMathService {
       unionBounds ??= Rect.zero;
 
       final lastStroke = strokes.last;
-      final eq = HandwritingMathEngine.detectAngleInvariantEqualSign(strokes);
+      final eq = placement == null
+          ? HandwritingMathEngine.detectAngleInvariantEqualSign(strokes)
+          : null;
+      final at = placement ??
+          (eq != null
+              ? HandwritingMathEngine.placeAnswer(
+                  eq,
+                  HandwritingMathEngine.lineBefore(eq, strokes),
+                )
+              : null);
 
       Offset insertPos;
       Offset dir = const Offset(1, 0);
       Offset normal = const Offset(0, 1);
       double avgHeight;
 
-      if (eq != null) {
-        dir = eq.direction;
-        normal = eq.normal;
-        avgHeight = math.max(28.0, math.min(140.0, eq.length * 1.5));
-        insertPos =
-            eq.center +
-            dir * (eq.length * 0.9 + 25.0) -
-            normal * (avgHeight * 0.5);
+      if (at != null) {
+        dir = at.direction;
+        normal = at.normal;
+        avgHeight = at.height;
+        insertPos = at.topLeft;
       } else {
         avgHeight = math.max(28.0, math.min(120.0, unionBounds.height * 0.70));
         insertPos = Offset(
@@ -217,6 +249,7 @@ class AiMathService {
   static Future<String?> renderStrokesToBase64Png(
     List<Stroke> strokes, {
     double padding = 24.0,
+    Set<String> highlightIds = const {},
   }) async {
     if (strokes.isEmpty) return null;
 
@@ -256,7 +289,9 @@ class AiMathService {
 
     for (final s in strokes) {
       final inkPaint = Paint()
-        ..color = const Color(0xFF000000)
+        ..color = highlightIds.contains(s.id)
+            ? const Color(0xFFE11D48)
+            : const Color(0xFF000000)
         ..strokeWidth = math.max(3.5, s.width * 1.25)
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round

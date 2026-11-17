@@ -20,6 +20,10 @@ class WhiteboardState {
   final bool isLeftHanded;
   final bool isSaving;
   final double zoomScale;
+
+  /// The scale shown as "100%" (fit-to-width on a page, 1.0 on the infinite
+  /// canvas).
+  final double zoomBase;
   final Offset panOffset;
   final ShapeDetectionResult? shapeSuggestion;
   final MathEvaluationResult? detectedMathResult;
@@ -56,6 +60,7 @@ class WhiteboardState {
     this.isAutoMathEnabled = true,
     this.isInfiniteCanvas = false,
     this.zoomScale = 1.0,
+    this.zoomBase = 1.0,
     this.panOffset = Offset.zero,
     this.shapeSuggestion,
     this.detectedMathResult,
@@ -64,6 +69,10 @@ class WhiteboardState {
   });
 
   Color get selectedColor => Color(selectedColorValue);
+
+  /// Zoom as shown to the user, relative to [zoomBase].
+  int get zoomPercent =>
+      (zoomScale / (zoomBase <= 0 ? 1.0 : zoomBase) * 100).round();
 
   WhiteboardState copyWith({
     ProjectModel? project,
@@ -85,6 +94,7 @@ class WhiteboardState {
     bool? isAutoMathEnabled,
     bool? isInfiniteCanvas,
     double? zoomScale,
+    double? zoomBase,
     Offset? panOffset,
     ShapeDetectionResult? Function()? shapeSuggestion,
     MathEvaluationResult? Function()? detectedMathResult,
@@ -113,6 +123,7 @@ class WhiteboardState {
       isAutoMathEnabled: isAutoMathEnabled ?? this.isAutoMathEnabled,
       isInfiniteCanvas: isInfiniteCanvas ?? this.isInfiniteCanvas,
       zoomScale: zoomScale ?? this.zoomScale,
+      zoomBase: zoomBase ?? this.zoomBase,
       panOffset: panOffset ?? this.panOffset,
       shapeSuggestion: shapeSuggestion != null
           ? shapeSuggestion()

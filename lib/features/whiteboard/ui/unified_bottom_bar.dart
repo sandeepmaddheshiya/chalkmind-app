@@ -22,7 +22,7 @@ class UnifiedBottomBar extends ConsumerWidget {
     final totalPages = state.project.totalPages;
     final isInfinite = state.isInfiniteCanvas;
     final itemNoun = isInfinite ? 'Board' : 'Page';
-    final zoomPercent = (state.zoomScale * 100).round();
+    final zoomPercent = state.zoomPercent;
     final hasSelection = state.selectedObjectIds.isNotEmpty;
 
     return Center(

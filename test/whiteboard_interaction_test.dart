@@ -77,7 +77,9 @@ void main() {
     await drag(tester, lineAcross(const Offset(400, 300), const Offset(400, 420), 6), kind: PointerDeviceKind.mouse);
 
     final after = c.read(whiteboardControllerProvider).project.currentPage.strokes.single.bounds;
-    expect(after.top - before.top, closeTo(120, 2));
+    // 120 screen pixels, in page units at the fitted zoom.
+    final zoom = c.read(whiteboardControllerProvider).zoomScale;
+    expect(after.top - before.top, closeTo(120 / zoom, 2));
     await key(tester, LogicalKeyboardKey.keyZ, ctrl: true);
     final undone = c.read(whiteboardControllerProvider).project.currentPage.strokes.single.bounds;
     expect(undone.top, closeTo(before.top, 0.5));

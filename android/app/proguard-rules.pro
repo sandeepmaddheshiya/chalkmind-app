@@ -24,3 +24,13 @@
 -if class androidx.credentials.CredentialManager
 -keep class androidx.credentials.playservices.** { *; }
 -keep class com.google.android.libraries.identity.googleid.** { *; }
+
+# ML Kit Digital Ink (on-device handwriting) downloads its model through
+# WorkManager, whose Room database is created by reflection from the
+# generated *_Impl class. Without these, release builds crash at startup
+# ("Failed to create an instance of androidx.work.impl.WorkDatabase").
+-keep class androidx.work.** { *; }
+-keep class * extends androidx.room.RoomDatabase { <init>(); }
+-keep class androidx.room.** { *; }
+-keep class com.google.mlkit.** { *; }
+-keep class com.google.android.gms.internal.mlkit_vision_digital_ink.** { *; }

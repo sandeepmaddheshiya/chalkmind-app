@@ -42,7 +42,7 @@ class CanvasZoomControls extends ConsumerWidget {
     final state = ref.watch(whiteboardControllerProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final zoomPercent = (state.zoomScale * 100).round();
+    final zoomPercent = state.zoomPercent;
 
     return Material(
       elevation: 6,

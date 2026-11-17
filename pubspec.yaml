@@ -50,6 +50,7 @@ dependencies:
   package_info_plus: ^10.2.2
   url_launcher: ^6.3.3
   in_app_purchase_android: ^0.5.5
+  google_mlkit_digital_ink_recognition: ^1.0.3
 
 dev_dependencies:
   flutter_test:

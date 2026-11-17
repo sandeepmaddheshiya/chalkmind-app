@@ -34,7 +34,214 @@ class HandwritingMathResult {
   Offset get suggestedWritePosition => insertPosition;
 }
 
+/// Where and how big to write an answer: [topLeft] is the top-left corner
+/// of the first character; characters advance along [direction].
+class AnswerPlacement {
+  final Offset topLeft;
+  final double height;
+  final Offset direction;
+  final Offset normal;
+  final int colorValue;
+  final double strokeWidth;
+
+  const AnswerPlacement({
+    required this.topLeft,
+    required this.height,
+    required this.direction,
+    required this.normal,
+    required this.colorValue,
+    required this.strokeWidth,
+  });
+}
+
 class HandwritingMathEngine {
+  /// The '=' the writer has just finished: the newest stroke is its second
+  /// bar. Solving starts only then, so it never fires on stray parallel
+  /// strokes or keeps re-firing while the next line is written.
+  static AngleInvariantEqualSign? justFinishedEqualSign(List<Stroke> strokes) {
+    if (strokes.length < 2) return null;
+    final last = strokes.last;
+    for (int j = strokes.length - 2; j >= math.max(0, strokes.length - 4); j--) {
+      final eq = _checkTwoStrokesForEqual(strokes[j], last);
+      if (eq != null) return eq;
+    }
+    return null;
+  }
+
+  /// The left-hand side of [eq]: strokes on the same line, before the '=',
+  /// in the order they were written.
+  static List<Stroke> lineBefore(
+    AngleInvariantEqualSign eq,
+    List<Stroke> pageStrokes,
+  ) {
+    final maxV = math.max(45.0, eq.length * 1.4);
+    final candidates = <_ProjectedStroke>[];
+    for (final s in pageStrokes) {
+      if (eq.consumedStrokeIds.contains(s.id)) continue;
+      final rel = s.bounds.center - eq.center;
+      final u = rel.dx * eq.direction.dx + rel.dy * eq.direction.dy;
+      final v = rel.dx * eq.normal.dx + rel.dy * eq.normal.dy;
+      if (u < -4.0 && u > -1400.0 && v.abs() < maxV) {
+        candidates.add(_ProjectedStroke(stroke: s, u: u, v: v));
+      }
+    }
+    if (candidates.isEmpty) return const [];
+
+    // Walk left from the '=' and stop at a wide gap: writing further along
+    // the same row belongs to something else.
+    candidates.sort((a, b) => b.u.compareTo(a.u));
+    final heights = candidates.map((c) => _extentV(c.stroke, eq.normal)).toList()
+      ..sort();
+    final charH = math.max(20.0, heights[heights.length ~/ 2]);
+    final kept = <String>{};
+    var edge = -eq.length / 2; // left end of the '=' (u)
+    for (final c in candidates) {
+      final (lo, hi) = _rangeU(c.stroke, eq.center, eq.direction);
+      if (hi < edge - charH * 2.5) break;
+      kept.add(c.stroke.id);
+      edge = math.min(edge, lo);
+    }
+    return [for (final s in pageStrokes) if (kept.contains(s.id)) s];
+  }
+
+  /// Answer position right after [eq], sized and aligned to the writer's
+  /// own characters on that line.
+  static AnswerPlacement placeAnswer(
+    AngleInvariantEqualSign eq,
+    List<Stroke> line,
+  ) {
+    // The two short bars of '=' give a noisy angle; the line itself (from
+    // its characters to the '=') gives the real direction of writing.
+    var dir = eq.direction;
+    if (line.isNotEmpty) {
+      var c = Offset.zero;
+      for (final s in line) {
+        c += s.bounds.center;
+      }
+      final d = eq.center - c / line.length.toDouble();
+      if (d.distance > eq.length * 0.8 && d.dx / d.distance > 0.75) {
+        dir = d / d.distance;
+      }
+    }
+    final normal = Offset(-dir.dy, dir.dx);
+    final spans = <(double lo, double hi)>[];
+    for (final s in line) {
+      spans.add(_rangeV(s, eq.center, normal));
+    }
+    double height;
+    double bottom;
+    final tallest = spans.isEmpty
+        ? 0.0
+        : spans.map((r) => r.$2 - r.$1).reduce(math.max);
+    final tall = spans.where((r) => r.$2 - r.$1 >= tallest * 0.45).toList();
+    if (tall.isEmpty || tallest < 8) {
+      height = (eq.length * 1.3).clamp(24.0, 140.0);
+      bottom = height / 2;
+    } else {
+      final hs = tall.map((r) => r.$2 - r.$1).toList()..sort();
+      final bs = tall.map((r) => r.$2).toList()..sort();
+      height = hs[hs.length ~/ 2].clamp(20.0, 160.0);
+      bottom = bs[bs.length ~/ 2];
+    }
+    final gap = math.max(12.0, height * 0.3);
+    final topLeft =
+        eq.center + dir * (eq.rightExtent + gap) + normal * (bottom - height);
+    return AnswerPlacement(
+      topLeft: topLeft,
+      height: height,
+      direction: dir,
+      normal: normal,
+      colorValue: eq.strokeColor,
+      strokeWidth: eq.strokeWidth,
+    );
+  }
+
+  /// Turns a handwriting reading (e.g. from the on-device recogniser) into
+  /// an arithmetic expression, or null when it isn't plain arithmetic
+  /// (variables, words) and needs the AI.
+  static String? arithmeticFromReading(String raw) {
+    var t = raw.trim();
+    if (t.endsWith('=')) t = t.substring(0, t.length - 1);
+    t = t
+        .replaceAll(RegExp(r'\s+'), '')
+        .replaceAll(RegExp('[−–—]'), '-')
+        .replaceAll('÷', '/')
+        .replaceAll('·', '*')
+        .replaceAll('×', '*');
+    // Letters commonly read in place of digits / operators, but only when
+    // they sit between numbers.
+    String betweenDigits(String s, String from, String to) => s.replaceAllMapped(
+      RegExp('(?<=[0-9)])[$from](?=[0-9(])'),
+      (_) => to,
+    );
+    t = betweenDigits(t, 'xX', '*');
+    t = t.replaceAllMapped(
+      RegExp('(?<=[0-9])[oO]|[oO](?=[0-9])'),
+      (_) => '0',
+    );
+    t = t.replaceAllMapped(RegExp('(?<=[0-9+*/(-])[lI|](?=[0-9+*/)-]|\$)|^[lI|](?=[0-9])'), (_) => '1');
+    if (!RegExp(r'^[0-9+\-*/().^%√²³]+$').hasMatch(t)) return null;
+    if (!RegExp(r'[0-9]').hasMatch(t)) return null;
+    if (!RegExp(r'[+\-*/^%√²³]').hasMatch(t)) return null;
+    return t;
+  }
+
+  /// Solves the first usable reading (best first). Stops at the first
+  /// reading that isn't arithmetic, so a lower-ranked guess never wins over
+  /// a top reading that needs the AI.
+  static HandwritingMathResult? solveReadings(
+    List<String> readings,
+    AnswerPlacement at,
+  ) {
+    for (final r in readings.take(3)) {
+      final expr = arithmeticFromReading(r);
+      if (expr == null) return null;
+      final res = MathEvaluator.evaluate(expr);
+      if (res == null) continue;
+      final details = UniversalMathEngine.getStepsAndExplanation(
+        expr,
+        res.resultText,
+      );
+      return HandwritingMathResult(
+        expression: '${_pretty(expr)} =',
+        answer: res.resultText,
+        insertPosition: at.topLeft,
+        characterHeight: at.height,
+        strokeColorValue: at.colorValue,
+        strokeWidth: at.strokeWidth,
+        direction: at.direction,
+        normal: at.normal,
+        steps: details.steps,
+        explanation: details.explanation,
+      );
+    }
+    return null;
+  }
+
+  static String _pretty(String expr) => expr
+      .replaceAllMapped(RegExp(r'([+\-*/])'), (m) => ' ${m[1]} ')
+      .replaceAll('*', '×')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+
+  static double _extentV(Stroke s, Offset normal) {
+    final (lo, hi) = _rangeV(s, Offset.zero, normal);
+    return hi - lo;
+  }
+
+  static (double, double) _rangeV(Stroke s, Offset origin, Offset normal) {
+    var lo = double.infinity, hi = -double.infinity;
+    for (final p in s.points) {
+      final v = (p.x - origin.dx) * normal.dx + (p.y - origin.dy) * normal.dy;
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
+    }
+    return (lo, hi);
+  }
+
+  static (double, double) _rangeU(Stroke s, Offset origin, Offset dir) =>
+      _rangeV(s, origin, dir);
+
   /// Checks whether recent strokes contain an '=' sign at any angle
   static bool hasEqualSign(List<Stroke> strokes) {
     return detectAngleInvariantEqualSign(strokes) != null;
@@ -201,15 +408,11 @@ class HandwritingMathEngine {
     final evalResult = MathEvaluator.evaluate(tokenString);
     if (evalResult == null) return null;
 
-    // Calculate insertion position: placed directly after '=' along the text direction
-    final targetHeight = math.max(
-      28.0,
-      math.min(140.0, equalSignInfo.length * 1.5),
+    // Write the answer right after '=', matching the writer's characters.
+    final placement = placeAnswer(
+      equalSignInfo,
+      [for (final p in equationStrokes) p.stroke],
     );
-    final insertOffset =
-        eqCenter +
-        dir * (equalSignInfo.length * 0.9 + 25.0) -
-        normal * (targetHeight * 0.5);
 
     final details = UniversalMathEngine.getStepsAndExplanation(
       tokenString,
@@ -219,8 +422,8 @@ class HandwritingMathEngine {
     return HandwritingMathResult(
       expression: '$tokenString =',
       answer: evalResult.resultText,
-      insertPosition: insertOffset,
-      characterHeight: targetHeight,
+      insertPosition: placement.topLeft,
+      characterHeight: placement.height,
       strokeColorValue: equalSignInfo.strokeColor,
       strokeWidth: equalSignInfo.strokeWidth,
       direction: dir,
@@ -283,6 +486,12 @@ class HandwritingMathEngine {
     if (angle1 < 0) angle1 += math.pi;
     if (angle2 < 0) angle2 += math.pi;
 
+    // '=' bars run along the line of writing: allow a slant of up to 40°,
+    // but never near-vertical bars (the stems of 1, 4, + and 7 are parallel
+    // too and were misread as a sideways '=').
+    bool flat(double a) => a < 0.70 || a > math.pi - 0.70;
+    if (!flat(angle1) || !flat(angle2)) return null;
+
     // Parallel check: angle difference must be <= 35 degrees
     final angleDiff = (angle1 - angle2).abs();
     final isParallel = angleDiff < 0.60 || (math.pi - angleDiff) < 0.60;
@@ -304,11 +513,22 @@ class HandwritingMathEngine {
     final uSep = (delta.dx * dir.dx + delta.dy * dir.dy).abs();
     if (uSep > maxLen * 0.90) return null;
 
-    // Perpendicular separation: must be between 4px and maxLen * 2.0 + 80px
+    // Perpendicular separation: the bars of '=' sit close together, about
+    // their own length apart at most.
     final vSep = (delta.dx * normal.dx + delta.dy * normal.dy).abs();
-    if (vSep < 4.0 || vSep > maxLen * 2.2 + 80.0) return null;
+    if (vSep < math.max(4.0, minLen * 0.08) || vSep > maxLen * 1.1 + 20.0) {
+      return null;
+    }
 
     final unionCenter = Offset((c1.dx + c2.dx) / 2, (c1.dy + c2.dy) / 2);
+    var rightExtent = 0.0;
+    for (final s in [s1, s2]) {
+      for (final p in s.points) {
+        final u =
+            (p.x - unionCenter.dx) * dir.dx + (p.y - unionCenter.dy) * dir.dy;
+        if (u > rightExtent) rightExtent = u;
+      }
+    }
 
     return AngleInvariantEqualSign(
       center: unionCenter,
@@ -318,6 +538,7 @@ class HandwritingMathEngine {
       strokeColor: s2.colorValue,
       strokeWidth: s2.width,
       consumedStrokeIds: {s1.id, s2.id},
+      rightExtent: rightExtent,
     );
   }
 
@@ -895,6 +1116,9 @@ class AngleInvariantEqualSign {
   final double strokeWidth;
   final Set<String> consumedStrokeIds;
 
+  /// How far the '=' reaches past [center] along [direction].
+  final double rightExtent;
+
   AngleInvariantEqualSign({
     required this.center,
     required this.direction,
@@ -903,6 +1127,7 @@ class AngleInvariantEqualSign {
     required this.strokeColor,
     required this.strokeWidth,
     required this.consumedStrokeIds,
+    this.rightExtent = 0,
   });
 }
 

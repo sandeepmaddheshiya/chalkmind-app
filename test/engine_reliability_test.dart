@@ -214,7 +214,7 @@ void main() {
       expect(s.canUndo, isFalse);
     });
 
-    test('auto-solve while signed out says so once instead of failing silently', () {
+    test('auto-solve while signed out says so once instead of failing silently', () async {
       final c = ProviderContainer();
       addTearDown(c.dispose);
       final n = c.read(whiteboardControllerProvider.notifier);
@@ -226,12 +226,14 @@ void main() {
       n.addStroke(line('x1', const Offset(300, 100), const Offset(320, 120)));
       n.addStroke(line('eq1', const Offset(340, 105), const Offset(370, 105)));
       n.addStroke(line('eq2', const Offset(340, 118), const Offset(370, 118)));
+      await Future<void>.delayed(Duration.zero); // solving is asynchronous
       final msg = c.read(whiteboardControllerProvider).aiErrorMessage;
       expect(msg, isNotNull);
       expect(msg, contains('Sign in'));
       expect(c.read(whiteboardControllerProvider).isCalculatingMath, isFalse);
       n.dismissAiError();
       n.addStroke(line('eq3', const Offset(340, 130), const Offset(370, 130)));
+      await Future<void>.delayed(Duration.zero);
       expect(c.read(whiteboardControllerProvider).aiErrorMessage, isNull, reason: 'only once per session');
     });
 

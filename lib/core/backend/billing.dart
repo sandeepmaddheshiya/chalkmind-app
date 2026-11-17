@@ -188,7 +188,7 @@ class BillingNotifier extends Notifier<BillingState> {
         available: true,
         offers: offers,
         error: () => offers.isEmpty
-            ? 'Plans are not available right now. Try again later.'
+            ? "Google Play didn't return any plans. Check your connection and try again."
             : null,
       );
     } catch (e) {

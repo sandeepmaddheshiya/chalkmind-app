@@ -18,6 +18,7 @@ import '../models/project_model.dart';
 import '../models/shape_model.dart';
 import '../models/stroke_model.dart';
 import '../models/text_model.dart';
+import '../recognition/ink_recognizer.dart';
 import '../models/tool_type.dart';
 import 'whiteboard_state.dart';
 
@@ -70,6 +71,8 @@ class WhiteboardNotifier extends Notifier<WhiteboardState> {
   WhiteboardState build() {
     _storageService = ref.watch(projectStorageProvider);
     _recoveryService = ref.watch(recoveryServiceProvider);
+    // Fetch the handwriting model in the background on first use.
+    unawaited(InkRecognizer.prepare());
 
     ref.onDispose(() {
       _autosaveTimer?.cancel();
@@ -85,7 +88,9 @@ class WhiteboardNotifier extends Notifier<WhiteboardState> {
     // Summaries (home screen listing) have no drawing; editing and autosaving
     // one would wipe the board. Callers must load the full board first.
     if (project.isSummary) {
-      throw ArgumentError('Load the full board (not its listing summary) before opening it');
+      throw ArgumentError(
+        'Load the full board (not its listing summary) before opening it',
+      );
     }
     _histories.clear();
     _cancelPendingAi();
@@ -106,6 +111,7 @@ class WhiteboardNotifier extends Notifier<WhiteboardState> {
   }
 
   void _cancelPendingAi() {
+    _cancelIdleWait();
     _visionAiDebounceTimer?.cancel();
     _aiCancelToken?.cancel();
     _aiCancelToken = null;
@@ -171,10 +177,13 @@ class WhiteboardNotifier extends Notifier<WhiteboardState> {
     state = state.copyWith(isLeftHanded: !state.isLeftHanded);
   }
 
-  void setZoomAndPan(double zoom, Offset pan) {
-    final z = zoom.clamp(0.10, 6.0);
-    if (z == state.zoomScale && pan == state.panOffset) return;
-    state = state.copyWith(zoomScale: z, panOffset: pan);
+  void setZoomAndPan(double zoom, Offset pan, {double? base}) {
+    final z = zoom.clamp(0.05, 8.0);
+    final b = base ?? state.zoomBase;
+    if (z == state.zoomScale && pan == state.panOffset && b == state.zoomBase) {
+      return;
+    }
+    state = state.copyWith(zoomScale: z, panOffset: pan, zoomBase: b);
   }
 
   void resetZoom() {
@@ -186,6 +195,11 @@ class WhiteboardNotifier extends Notifier<WhiteboardState> {
   void addStroke(Stroke stroke) {
     final command = AddStrokeCommand(stroke);
     _executeCommand(command);
+
+    // More ink right after an '=' means the writer is carrying on (often
+    // writing the answer themselves): don't spend an AI answer on it.
+    _inkSeq++;
+    _cancelIdleWait();
 
     // Any new ink replaces a pending PDF look-up offer.
     if (state.pdfLookup != null) state = state.copyWith(pdfLookup: () => null);
@@ -199,59 +213,19 @@ class WhiteboardNotifier extends Notifier<WhiteboardState> {
     }
 
     if (stroke.toolType.isDrawingTool) {
-      // 1. Check if the latest strokes form an equation ending with '=' (if Auto Math is enabled)
+      // 1. Just finished an '=': solve the line in front of it.
       if (state.isAutoMathEnabled) {
-        final equationStrokes = HandwritingMathEngine.getEquationStrokes(
-          state.project.currentPage.strokes,
-        );
-
-        if (equationStrokes != null && equationStrokes.length >= 2) {
-          // Teacher is writing a math equation!
-          // Suppress any geometric shape suggestion
-          if (state.shapeSuggestion != null) {
-            state = state.copyWith(shapeSuggestion: () => null);
-          }
-
-          // STEP 1: Fast real-time local evaluation (0ms latency!)
-          final localResult = HandwritingMathEngine.detectHandwrittenEquation(
-            state.project.currentPage.strokes,
-          );
-
-          if (localResult != null) {
-            _visionAiDebounceTimer?.cancel();
-            // Solved instantly in real time (0ms)!
-            state = state.copyWith(
-              handwritingMathResult: () => localResult,
-              isCalculatingMath: false,
-              shapeSuggestion: () => null,
-            );
-            return;
-          }
-
-          // STEP 2: If local evaluation didn't resolve (e.g. geometry diagram, triangle with unknown x):
-          // Debounce Vision AI by 500ms to avoid flooding upstream workers on every pen touch.
-          // Signed out: say so once per session (with a Sign in shortcut)
-          // instead of failing silently, then stay quiet.
-          _visionAiDebounceTimer?.cancel();
-          if (!ref.read(aiConfigProvider).isConfigured) {
-            if (!_shownMissingKeyHint) {
-              _shownMissingKeyHint = true;
-              state = state.copyWith(
-                aiErrorMessage: () =>
-                    'This needs the AI solver (geometry, word problems, chemistry...). '
-                    'Sign in with Google to turn it on.',
-              );
+        final strokes = state.project.currentPage.strokes;
+        final eq = HandwritingMathEngine.justFinishedEqualSign(strokes);
+        if (eq != null) {
+          final line = HandwritingMathEngine.lineBefore(eq, strokes);
+          if (line.isNotEmpty) {
+            if (state.shapeSuggestion != null) {
+              state = state.copyWith(shapeSuggestion: () => null);
             }
+            unawaited(_solveFromEquals(eq, line));
             return;
           }
-          state = state.copyWith(isCalculatingMath: true);
-          _visionAiDebounceTimer = Timer(const Duration(milliseconds: 500), () {
-            final problemStrokes = HandwritingMathEngine.getProblemStrokes(
-              state.project.currentPage.strokes,
-            );
-            _triggerVisionAiMath(problemStrokes);
-          });
-          return;
         }
       }
 
@@ -280,9 +254,93 @@ class WhiteboardNotifier extends Notifier<WhiteboardState> {
     }
   }
 
+  /// Solves the line before a just-written '='. Plain arithmetic is read
+  /// on the device and answered at once; anything else (variables, several
+  /// lines, diagrams, chemistry) goes to the AI, with the answer still
+  /// written right after this '='.
+  Future<void> _solveFromEquals(
+    AngleInvariantEqualSign eq,
+    List<Stroke> line,
+  ) async {
+    _cancelPendingAi();
+    final requestId = ++_visionAiRequestId;
+    final inkAtEquals = _inkSeq;
+    final pageId = state.project.currentPage.id;
+    final placement = HandwritingMathEngine.placeAnswer(eq, line);
+
+    bool stale() =>
+        !ref.mounted ||
+        requestId != _visionAiRequestId ||
+        state.project.currentPage.id != pageId;
+
+    // 1. On-device reading (tens of milliseconds, works offline).
+    final readings = await InkRecognizer.recognize(line);
+    if (stale()) return;
+    final strokes = state.project.currentPage.strokes;
+    final local = readings != null
+        ? HandwritingMathEngine.solveReadings(readings, placement)
+        // Reader not ready yet (first run, model downloading): built-in rules.
+        : HandwritingMathEngine.detectHandwrittenEquation(strokes);
+    if (local != null) {
+      state = state.copyWith(
+        handwritingMathResult: () => local,
+        isCalculatingMath: false,
+        shapeSuggestion: () => null,
+      );
+      return;
+    }
+
+    // 2. The AI, for everything that isn't plain arithmetic.
+    if (!ref.read(aiConfigProvider).isConfigured) {
+      if (!_shownMissingKeyHint) {
+        _shownMissingKeyHint = true;
+        state = state.copyWith(
+          aiErrorMessage: () =>
+              'This needs the AI solver (geometry, word problems, chemistry...). '
+              'Sign in with Google to turn it on.',
+        );
+      }
+      return;
+    }
+    if (_inkSeq != inkAtEquals) return;
+    // Ask the AI only once the pen has rested, so lines the writer
+    // finishes on their own (e.g. "2x + 3 = 7") cost no AI answers.
+    final idle = Completer<bool>();
+    _visionAiDebounceTimer?.cancel();
+    _idleWait = idle;
+    _visionAiDebounceTimer = Timer(aiIdleDelay, () {
+      if (!idle.isCompleted) idle.complete(true);
+    });
+    if (!await idle.future || stale() || _inkSeq != inkAtEquals) return;
+    await _triggerVisionAiMath(
+      HandwritingMathEngine.getProblemStrokes(state.project.currentPage.strokes),
+      placement: placement,
+      targetIds: eq.consumedStrokeIds,
+    );
+  }
+
+  /// How long the pen must rest after an '=' before the AI is asked.
+  @visibleForTesting
+  static Duration aiIdleDelay = const Duration(milliseconds: 1200);
+
+  Completer<bool>? _idleWait;
+
+  /// Counts strokes added; tells an auto-solve whether writing went on.
+  int _inkSeq = 0;
+
+  void _cancelIdleWait() {
+    final w = _idleWait;
+    if (w == null) return;
+    _idleWait = null;
+    _visionAiDebounceTimer?.cancel();
+    if (!w.isCompleted) w.complete(false);
+  }
+
   Future<void> _triggerVisionAiMath(
     List<Stroke> strokes, {
     bool userInitiated = false,
+    AnswerPlacement? placement,
+    Set<String> targetIds = const {},
   }) async {
     if (strokes.isEmpty) {
       state = state.copyWith(isCalculatingMath: false);
@@ -315,6 +373,8 @@ class WhiteboardNotifier extends Notifier<WhiteboardState> {
         config: config,
         cancelToken: token,
         interactive: userInitiated,
+        placement: placement,
+        targetIds: targetIds,
       );
     } on AiException catch (e) {
       if (e.kind != AiErrorKind.cancelled) {
@@ -975,6 +1035,7 @@ class WhiteboardNotifier extends Notifier<WhiteboardState> {
     if (_eraseSnapshot != null) endEraseGesture();
     if (!_historyManager.canUndo) return;
     final newPage = _historyManager.undo(state.project.currentPage);
+    _clearPendingOffers();
     _updateCurrentPage(newPage);
     _pruneSelection();
   }
@@ -982,8 +1043,31 @@ class WhiteboardNotifier extends Notifier<WhiteboardState> {
   void redo() {
     if (!_historyManager.canRedo) return;
     final newPage = _historyManager.redo(state.project.currentPage);
+    _clearPendingOffers();
     _updateCurrentPage(newPage);
     _pruneSelection();
+  }
+
+  /// Undo / redo changes the ink an offer was based on, so drop every
+  /// pending "convert to shape", "write the answer" and look-up offer, and
+  /// any AI answer still on its way.
+  void _clearPendingOffers() {
+    _visionAiDebounceTimer?.cancel();
+    _aiCancelToken?.cancel();
+    _aiCancelToken = null;
+    _visionAiRequestId++;
+    if (state.shapeSuggestion == null &&
+        state.handwritingMathResult == null &&
+        state.pdfLookup == null &&
+        !state.isCalculatingMath) {
+      return;
+    }
+    state = state.copyWith(
+      shapeSuggestion: () => null,
+      handwritingMathResult: () => null,
+      pdfLookup: () => null,
+      isCalculatingMath: false,
+    );
   }
 
   /// Drops selected ids that no longer exist on the page (after undo / redo).
@@ -1234,10 +1318,16 @@ class WhiteboardNotifier extends Notifier<WhiteboardState> {
       updatedAt: DateTime.now(),
     );
 
+    // A shape offer whose ink is gone (erased, deleted) is stale.
+    final suggestion = state.shapeSuggestion;
+    final stale = suggestion != null &&
+        !newPage.strokes.any((st) => st.id == suggestion.originalStroke.id);
+
     state = state.copyWith(
       project: updatedProject,
       canUndo: _historyManager.canUndo,
       canRedo: _historyManager.canRedo,
+      shapeSuggestion: stale ? () => null : null,
     );
 
     // Continuous autosave to crash recovery draft

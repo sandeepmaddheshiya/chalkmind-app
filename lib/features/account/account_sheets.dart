@@ -431,9 +431,11 @@ class _PaywallSheetState extends ConsumerState<_PaywallSheet> {
                 child: Center(child: CircularProgressIndicator()),
               )
             else if (offers.isEmpty)
-              Text(
-                billing.error ?? 'Plans are not available right now.',
-                style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+              _PlansUnavailable(
+                message:
+                    billing.error ??
+                    "Google Play didn't return any plans. Check your connection and try again.",
+                onRetry: () => ref.read(billingProvider.notifier).loadOffers(),
               )
             else ...[
               for (final o in offers)
@@ -898,4 +900,61 @@ class _AiGateListenerState extends State<AiGateListener> {
 
   @override
   Widget build(BuildContext context) => widget.child;
+}
+
+/// Shown in the paywall when Google Play returns no plans (offline, store
+/// unavailable, or the subscription isn't published yet).
+class _PlansUnavailable extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+
+  const _PlansUnavailable({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.cloud_off_rounded, size: 20, color: scheme.onSurfaceVariant),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  "Plans couldn't load",
+                  style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(message, style: TextStyle(color: scheme.onSurfaceVariant)),
+          const SizedBox(height: 4),
+          Text(
+            'Your free AI answers keep working in the meantime.',
+            style: TextStyle(color: scheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('Try again'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
