@@ -1,0 +1,1 @@
+Smart whiteboard that solves handwritten maths, explains & annotates PDFs

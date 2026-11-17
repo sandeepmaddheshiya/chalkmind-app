@@ -18,17 +18,18 @@ Alternative to A/B test later in Play Console's store listing experiments:
 
 > Write naturally. Learn smarter. Chalkmind is the AI whiteboard for teaching, homework and revision.
 >
-> Write a maths problem by hand, end it with "=", and Chalkmind works it out, then writes the answer in handwriting next to yours. Stuck? Ask the built-in AI tutor to explain, give a hint, or check your working step by step.
+> Write a maths problem by hand, end it with "=", and Chalkmind writes the answer next to yours, in handwriting. Simple sums are solved instantly on your device, even offline. For harder problems, ask the built-in AI tutor to solve, explain, give a hint or check your working step by step.
 >
 > **SOLVE HANDWRITTEN MATHS**
-> • Arithmetic, algebra, identities, equations and geometry diagrams
+> • Arithmetic answered instantly on the device, written back in handwriting
+> • Algebra, identities, equations and geometry diagrams with the AI solver
 > • Step-by-step working you can add to the board
 > • Plot graphs of equations right on the page
-> • Physics and chemistry problems too (balancing equations, units)
+> • Physics and chemistry too: balance equations, units, formulas
 >
 > **AN AI TUTOR ON YOUR BOARD**
 > • Explain anything you select, in simple words
-> • "Check my work" finds the first mistake and shows the fix
+> • "Check my work" finds the first wrong line and explains the rule
 > • Hints that guide without giving the answer away
 > • Practice questions, quizzes, flashcards and revision notes
 > • Lesson plans and worksheets for teachers
@@ -44,16 +45,19 @@ Alternative to A/B test later in Play Console's store listing experiments:
 > **A WHITEBOARD THAT FEELS LIKE PAPER**
 > • Pen, pencil, marker and highlighter with stylus palm rejection
 > • Smart shapes: rough circles, boxes and arrows snap into neat ones
-> • Partial eraser, select, move, copy and undo per page
-> • Infinite canvas or page mode; ruled, grid and dark boards
-> • Works great on tablets and phones, with keyboard shortcuts on Chromebooks
+> • Partial eraser, select, move, copy and undo
+> • Page mode that fits your screen, or an infinite canvas; ruled, grid and dark boards
 >
 > **MADE FOR CLASSROOMS**
-> • Teachers: explain concepts live, prepare lessons, present
+> • Teachers: explain live, prepare lessons, present on a classroom TV or projector by casting your tablet
+> • Works on Android tablets, phones and smart-classroom touchscreen panels with Google Play
 > • Students: solve homework, take notes, revise
-> • Boards save automatically on your device
+> • Boards are saved automatically on your device
 >
-> Privacy: AI features send only what you choose (a selection, page or photo) to an AI service to answer you. Nothing is sent unless you use an AI feature.
+> **FREE TO START**
+> Writing, PDFs, shapes and on-device sums are free, with daily AI answers included. Chalkmind Plus gives up to 100 AI answers a day, with a 7-day free trial.
+>
+> Privacy: no ads and no tracking. Your boards stay on your device. AI features send only what you choose (a selection, page or photo) to answer you; nothing is sent unless you use an AI feature.
 
 ## Contact & policy links (Play Console)
 
@@ -100,9 +104,10 @@ These match what the app and `chalkmind-server` actually do (see https://chalkmi
 | Photos and videos → Photos (board images / attached photos sent for AI answers) | Yes, processed ephemerally, not stored | App functionality | Optional |
 | App activity → Other user-generated content (AI questions, reported answers, feedback) | Yes | App functionality, Developer communications | Optional |
 | App activity → App interactions (AI request counts per day) | Yes | App functionality (plan limits), Fraud prevention | Optional |
+| App info and performance → Diagnostics (device model, Android version, recognition language; sent by Google ML Kit for on-device handwriting recognition) | Yes | Analytics | Required (collected automatically) |
 | Financial info → Purchase history (subscription status from Google Play) | Yes | App functionality | Optional |
 
-No location, contacts, device IDs or advertising IDs are collected. There are no analytics or ads SDKs.
+No location, contacts, device IDs or advertising IDs are collected. There are no ads SDKs; the only analytics are Google ML Kit's diagnostics listed above (see https://developers.google.com/ml-kit/android-data-disclosure).
 
 **Other declarations**
 
@@ -112,4 +117,4 @@ No location, contacts, device IDs or advertising IDs are collected. There are no
 - **AI-generated content:** Yes. Users can report answers with the flag button (they appear in Admin → Reports).
 - **Target audience:** 13+ (students and teachers). If you target under-13s, the Families policy applies and you must review the AI and sign-in flows against it first.
 
-**Subscription:** product `chalkmind_plus`, with base plans `monthly` and `yearly`. Each has a `trial-7d` free-trial offer for new customers. The step-by-step setup is in `chalkmind-server/README.md`.
+**Subscription:** product `chalkmind_plus`, with base plans `monthly` (₹249) and `annual` (₹1,999; the first `yearly` plan was set up as monthly by mistake and is deactivated). Each has a `trial-7d` 7-day free-trial offer for new customers. Plus allows 100 AI answers a day. The step-by-step setup is in `chalkmind-server/README.md`.
