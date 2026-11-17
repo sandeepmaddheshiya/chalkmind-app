@@ -15,6 +15,7 @@ import '../../account/account_style.dart';
 import '../assistant/board_assistant.dart';
 import '../assistant/board_context.dart';
 import '../assistant/diagram_builder.dart';
+import '../rendering/background_painter.dart';
 import '../models/text_model.dart';
 import '../state/whiteboard_notifier.dart';
 
@@ -195,7 +196,12 @@ class _AiAssistantPanelState extends ConsumerState<AiAssistantPanel> {
           cancelToken: token,
         );
         if (!mounted || token.isCancelled) return;
-        final elements = DiagramBuilder.build(spec, origin: _insertOrigin());
+        var elements = DiagramBuilder.build(spec, origin: _insertOrigin());
+        // On a page, keep the whole diagram on the sheet (content outside
+        // it is hidden).
+        if (!ref.read(whiteboardControllerProvider).isInfiniteCanvas) {
+          elements = elements.fitInto(BackgroundPainter.defaultPageRect.deflate(30));
+        }
         ref
             .read(whiteboardControllerProvider.notifier)
             .insertElements(

@@ -105,6 +105,77 @@ class DiagramElements {
   final List<ShapeObject> shapes;
   final List<TextObject> texts;
   const DiagramElements(this.shapes, this.texts);
+
+  /// Bounding box of everything in the diagram.
+  Rect get bounds {
+    Rect? r;
+    for (final s in shapes) {
+      r = r == null ? s.bounds : r.expandToInclude(s.bounds);
+    }
+    for (final t in texts) {
+      r = r == null ? t.bounds : r.expandToInclude(t.bounds);
+    }
+    return r ?? Rect.zero;
+  }
+
+  /// Fits the diagram inside [area] (e.g. the page in page mode): moved in
+  /// from the edges and, when too big, scaled down uniformly (shapes, text
+  /// and spacing), but never below [minScale] so text stays readable.
+  DiagramElements fitInto(Rect area, {double minScale = 0.5}) {
+    final b = bounds;
+    if (b.isEmpty || area.isEmpty) return this;
+    if (area.contains(b.topLeft) && area.contains(b.bottomRight)) return this;
+    // Scale: text padding doesn't shrink with the font, so refine the factor
+    // from the measured result a few times.
+    var f = math.min(1.0, math.min(area.width / b.width, area.height / b.height));
+    var out = this;
+    for (var pass = 0; pass < 4; pass++) {
+      f = f.clamp(minScale, 1.0).toDouble();
+      final k = f;
+      out = f == 1.0 ? this : _mapped((p) => b.topLeft + (p - b.topLeft) * k, k);
+      final ob = out.bounds;
+      final over = math.max(ob.width / area.width, ob.height / area.height);
+      if (over <= 1.0 || f <= minScale) break;
+      f = f / over;
+    }
+    // Move it inside the area, keeping it as close to where it was put.
+    final ob = out.bounds;
+    final left = ob.left.clamp(area.left, math.max(area.left, area.right - ob.width)).toDouble();
+    final top = ob.top.clamp(area.top, math.max(area.top, area.bottom - ob.height)).toDouble();
+    final shift = Offset(left - ob.left, top - ob.top);
+    return shift == Offset.zero ? out : out._mapped((p) => p + shift, 1.0);
+  }
+
+  DiagramElements _mapped(Offset Function(Offset) map, double f) {
+    return DiagramElements(
+      [
+        for (final s in shapes)
+          ShapeObject(
+            id: s.id,
+            shapeType: s.shapeType,
+            start: map(s.start),
+            end: map(s.end),
+            strokeColorValue: s.strokeColorValue,
+            strokeWidth: s.strokeWidth,
+            fillColorValue: s.fillColorValue,
+            isFilled: s.isFilled,
+            customVertices: s.customVertices?.map(map).toList(),
+          ),
+      ],
+      [
+        for (final t in texts)
+          TextObject(
+            id: t.id,
+            text: t.text,
+            position: map(t.position),
+            fontSize: t.fontSize * f,
+            colorValue: t.colorValue,
+            isBold: t.isBold,
+            isItalic: t.isItalic,
+          ),
+      ],
+    );
+  }
 }
 
 /// Lays out a diagram as ordinary shapes, arrows and text so teachers and

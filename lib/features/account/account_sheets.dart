@@ -65,7 +65,11 @@ class _SignInSheetState extends ConsumerState<_SignInSheet> {
   @override
   void initState() {
     super.initState();
-    ref.read(accountProvider.notifier).clearError();
+    // Clear a previous sign-in error after this frame: changing a provider
+    // while the sheet is being built throws (the sheet then fails to open).
+    Future.microtask(() {
+      if (mounted) ref.read(accountProvider.notifier).clearError();
+    });
     LegalConsent.accepted().then((v) {
       if (mounted && v) setState(() => _agreed = true);
     });

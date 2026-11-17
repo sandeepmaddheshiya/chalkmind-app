@@ -337,6 +337,40 @@ void main() {
       }
     });
 
+    test('on a page, a large mind map is fitted onto the sheet and stays readable', () {
+      final spec = DiagramSpec.parse(
+        jsonEncode({
+          'title': 'Photosynthesis',
+          'nodes': [
+            {'id': 'root', 'label': 'Photosynthesis'},
+            for (int i = 0; i < 8; i++) {'id': 'n$i', 'label': 'Branch with a long label $i'},
+            for (int i = 0; i < 8; i++) {'id': 'm$i', 'label': 'Leaf detail $i'},
+          ],
+          'edges': [
+            for (int i = 0; i < 8; i++) {'from': 'root', 'to': 'n$i'},
+            for (int i = 0; i < 8; i++) {'from': 'n$i', 'to': 'm$i'},
+          ],
+        }),
+        DiagramKind.mindmap,
+      );
+      // Inserted near the right edge, as when the user looks at that area.
+      final raw = DiagramBuilder.build(spec, origin: const Offset(700, 300));
+      const sheet = Rect.fromLTWH(70, 70, 1040, 1490);
+      expect(raw.bounds.right, greaterThan(sheet.right), reason: 'precondition: overflows the page');
+      final fitted = raw.fitInto(sheet);
+      final b = fitted.bounds;
+      expect(b.left, greaterThanOrEqualTo(sheet.left - 0.5));
+      expect(b.right, lessThanOrEqualTo(sheet.right + 0.5));
+      expect(b.top, greaterThanOrEqualTo(sheet.top - 0.5));
+      expect(b.bottom, lessThanOrEqualTo(sheet.bottom + 0.5));
+      expect(fitted.texts.map((t) => t.fontSize).reduce((a, c) => a < c ? a : c), greaterThanOrEqualTo(14 * 0.5));
+      // Already fitting: unchanged.
+      final small = DiagramBuilder.build(spec, origin: const Offset(100, 100));
+      if (small.bounds.width <= sheet.width && small.bounds.height <= sheet.height) {
+        expect(identical(small.fitInto(sheet), small), isTrue);
+      }
+    });
+
     test('invalid diagram output raises a bad-response error', () async {
       mock((r, _) async => _ok('Sorry, I cannot draw that.'));
       await expectLater(
