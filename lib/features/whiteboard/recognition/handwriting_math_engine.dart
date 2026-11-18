@@ -492,6 +492,12 @@ class HandwritingMathEngine {
     bool flat(double a) => a < 0.70 || a > math.pi - 0.70;
     if (!flat(angle1) || !flat(angle2)) return null;
 
+    // Line angles wrap at 180°: a bar sloping a hair up (179°) and one a
+    // hair down (1°) are nearly parallel. Bring them onto the same side
+    // before comparing and averaging, or the average points straight up.
+    if (angle2 - angle1 > math.pi / 2) angle2 -= math.pi;
+    if (angle1 - angle2 > math.pi / 2) angle2 += math.pi;
+
     // Parallel check: angle difference must be <= 35 degrees
     final angleDiff = (angle1 - angle2).abs();
     final isParallel = angleDiff < 0.60 || (math.pi - angleDiff) < 0.60;

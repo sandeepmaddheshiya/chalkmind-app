@@ -42,6 +42,20 @@ void main() {
       expect(fired, [5, 8], reason: 'after the 2nd bar of each "=" only');
     });
 
+    test('an "=" whose bars tilt slightly opposite ways is still found', () {
+      // Captured "24 × 15 =": one bar slopes a hair up, the other a hair down.
+      // Their angles wrap (≈179° and ≈0°) and used to average to vertical.
+      final p = ProjectModel.fromJson(
+        jsonDecode(File('test/fixtures/equals_opposite_tilt_board.json').readAsStringSync())
+            as Map<String, dynamic>,
+      );
+      final s = p.pages.first.strokes;
+      final eq = HandwritingMathEngine.justFinishedEqualSign(s);
+      expect(eq, isNotNull);
+      expect(eq!.direction.dx, greaterThan(0.95), reason: 'horizontal, not vertical');
+      expect(HandwritingMathEngine.lineBefore(eq, s), hasLength(8));
+    });
+
     test('the stems of "4" and "+" are not a sideways "="', () {
       // Previously these parallel vertical strokes became an "=" and the
       // answer was written rotated 90° in the middle of the page.
